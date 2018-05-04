@@ -35,10 +35,12 @@
 typedef uint64_t nk_value;
 typedef struct nk_actor_t nk_actor_t;
 typedef union { double f; nk_value v; } nk_float_t;
+typedef struct { nk_value key; nk_value value; } nk_cell_t;
 typedef struct { uint32_t size; nk_value* data; } nk_array_t;
 typedef struct { uint32_t size; unsigned char* data; } nk_string_t;
+typedef struct { size_t size; size_t capacity; nk_cell_t* cells; } nk_obj_t;
 
-nk_value nk_alloc_data(size_t bytes);
+#define nk_alloc_data nk_alloc
 nk_value nk_alloc_array(uint32_t size);
 nk_value nk_alloc_string(uint32_t bytes);
 nk_value nk_alloc_object(nk_value proto);
@@ -47,18 +49,21 @@ inline nk_value nk_alloc_float(double f) { nk_float_t t = { .f = f }; return t.v
 
 void* nk_ptr(nk_value v);
 #define nk_int(v) ((int32_t)(v))
+nk_value nk_from_ptr(void* ptr, nk_value type);
 bool nk_array(nk_value v, nk_array_t* array);
 bool nk_string(nk_value v, nk_string_t* string);
 inline double nk_float(nk_value v) { nk_float_t t = { .v = v }; return t.f; }
 
-void  nk_gmark(void* ptr);
-void* nk_alloc(size_t bytes);
+void nk_free(nk_value value);
 void  nk_gcollect(bool major);
-void* nk_realloc(void* ptr, size_t bytes);
+nk_value nk_alloc(size_t bytes);
+nk_value nk_realloc(nk_value value, size_t bytes);
 
 nk_value nk_this();
 nk_actor_t* nk_actor_this();
+void nk_actor_free(nk_actor_t* actor);
 nk_value nk_actor_id(nk_actor_t* actor);
+bool nk_actor_send(nk_actor_t* actor, nk_value value);
 nk_actor_t* nk_actor_spawn(nk_value func, nk_value* args, int n_args);
 
 #endif // _NYANKO_H

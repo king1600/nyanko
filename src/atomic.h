@@ -1,11 +1,14 @@
 #ifndef _NYANKO_ATOMIC_H
 #define _NYANKO_ATOMIC_H
 
+#define NK_FIRST_BIT(x) __builtin_ffsll(x)
 #define NK_UNREACHABLE() __builtin_unreachable()
 #define NK_LIKELY(expr) __builtin_expect(!!(expr), 1)
 #define NK_UNLIKELY(expr) __builtin_expect(!!(expr), 0)
 #define NK_INLINE __attribute__((always_inline)) inline
 #define NK_POW2(x) (1ULL << (64ULL - __builtin_clzl((x) - 1ULL)))
+#define NK_PREFETCH_READ(addr, locality) __builtin_prefetch(addr, 0, locality)
+#define NK_PREFETCH_WRITE(addr, locality) __builtin_prefetch(addr, 1, locality)
 
 #include <stdbool.h>
 #include <stdatomic.h>
