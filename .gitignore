@@ -1,5 +1,7 @@
-build
 *.o
 *.a
 *.d
 *.dll
+
+build
+nyanko

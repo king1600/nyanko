@@ -5,7 +5,7 @@
 #include <stddef.h>
 #include <stdbool.h>
 
-#if defined(_WIN32)
+#if defined(_WIN32) || defined(_WIN64)
 #define NK_WINDOWS
 #elif defined(__linux__)
 #define NK_LINUX
