@@ -1,9 +1,9 @@
-CC        := gcc
+CC        := clang
 SRC_DIR   := src
 BUILD_DIR := build
 LDFLAGS   := -pthread
 INCLUDES  := 
-CFLAGS    := -g -Wall -O3
+CFLAGS    = -g -Wall -O3
 BINARY    := nyanko
 EXT       := c
 
@@ -12,7 +12,7 @@ OBJECTS := $(SOURCES:$(SRC_DIR)/%.$(EXT)=$(BUILD_DIR)/%.o)
 DEPS    := $(OBJECTS:.o=.d)
 
 $(BINARY) : $(OBJECTS)
-	$(CC) $(OBJECTS) -o $@ $(LDFLAGS)
+	$(CC) $(CFLAGS) $(OBJECTS) -o $@ $(LDFLAGS)
 
 $(BUILD_DIR)/%.o : $(SRC_DIR)/%.$(EXT)
 	$(CC) $(CFLAGS) $(INCLUDES) -MMD -MP -c $< -o $@

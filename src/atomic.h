@@ -1,57 +1,30 @@
-#ifndef _NYANKO_ATOMIC_H
-#define _NYANKO_ATOMIC_H
+#ifndef _NK_ATOMIC_H
+#define _NK_ATOMIC_H
 
-#define NK_FIRST_BIT(x) __builtin_ffsll(x)
-#define NK_UNREACHABLE() __builtin_unreachable()
-#define NK_LIKELY(expr) __builtin_expect(!!(expr), 1)
-#define NK_UNLIKELY(expr) __builtin_expect(!!(expr), 0)
-#define NK_INLINE __attribute__((always_inline)) inline
-#define NK_POW2(x) (1ULL << (64ULL - __builtin_clzl((x) - 1ULL)))
-#define NK_PREFETCH_READ(addr, locality) __builtin_prefetch(addr, 0, locality)
-#define NK_PREFETCH_WRITE(addr, locality) __builtin_prefetch(addr, 1, locality)
-
-#include <stdbool.h>
+#include <stdint.h>
 #include <stdatomic.h>
-#define NK_ATOMIC(type) type _Atomic
-#define NK_ATOMIC_INIT(ptr, val) atomic_init(ptr, val)
 
-#define nk_atomic_relaxed memory_order_relaxed
-#define nk_atomic_consume memory_order_consume
-#define nk_atomic_acquire memory_order_acquire
-#define nk_atomic_release memory_order_release
-#define nk_atomic_seq_cst memory_order_seq_cst
-#define nk_atomic_acq_rel memory_order_acq_rel
+#define NK_ATOMIC(T) T _Atomic
+#ifdef NK_WINDOWS
+#define NK_DWORD __int128_t
+#else
+#define NK_DWORD int64_t
+#endif
 
-#define nk_atomic_fence(order) atomic_thread_fence(order)
-#define nk_atomic_load(ptr, order) atomic_load_explicit(ptr, order)
-#define nk_atomic_store(ptr, value, order) atomic_store_explicit(ptr, value, order)
-#define nk_atomic_swap(ptr, swap, order) atomic_exchange_explicit(ptr, swap, order)
-#define nk_atomic_add(ptr, value, order) atomic_fetch_add_explicit(ptr, value, order)
-#define nk_atomic_sub(ptr, value, order) atomic_fetch_sub_explicit(ptr, value, order)
-#define nk_atomic_cas_strong(ptr, test, swap) atomic_compare_exchange_strong(ptr, test, swap)
-#define nk_atomic_cas_weak(ptr, test, swap, succ, fail) atomic_compare_exchange_weak_explicit(ptr, test, swap, succ, fail)
+#define NK_ATOMIC_RELAXED __ATOMIC_RELAXED
+#define NK_ATOMIC_CONSUME __ATOMIC_CONSUME
+#define NK_ATOMIC_ACQUIRE __ATOMIC_ACQUIRE
+#define NK_ATOMIC_RELEASE __ATOMIC_RELEASE
+#define NK_ATOMIC_ACQ_REL __ATOMIC_ACQ_REL
+#define NK_ATOMIC_SEQ_CST __ATOMIC_SEQ_CST
 
-typedef struct {
-    size_t size;
-    size_t rear;
-    size_t front;
-    void** data;
-} nk_ring_t;
+#define nk_atomic_fence(mo) __atomic_thread_fence(mo)
+#define nk_atomic_load(ptr, mo) __atomic_load_n(ptr, mo)
+#define nk_atomic_add(ptr, val, mo) __atomic_fetch_add(ptr, val, mo)
+#define nk_atomic_sub(ptr, val, mo) __atomic_fetch_sub(ptr, val, mo)
+#define nk_atomic_store(ptr, val, mo) __atomic_store_n(ptr, val, mo)
+#define nk_atomic_swap(ptr, val, mo) __atomic_exchange_n(ptr, val, mo)
+#define nk_atomic_cas_weak(ptr, exp, des, succ, fail) __atomic_compare_exchange_n(ptr, exp, des, true, succ, fail)
+#define nk_atomic_cas_strong(ptr, exp, des, succ, fail) __atomic_compare_exchange_n(ptr, exp, des, false, succ, fail)
 
-void nk_ring_init(nk_ring_t* ring, size_t size);
-bool nk_ring_push(nk_ring_t* ring, void* value);
-void* nk_ring_pop(nk_ring_t* ring);
-void nk_ring_free(nk_ring_t* ring);
-
-typedef struct nk_qnode_t nk_qnode_t;
-typedef struct {
-    NK_ATOMIC(nk_qnode_t*) head;
-    NK_ATOMIC(nk_qnode_t*) tail;
-} nk_queue_t;
-
-void nk_queue_init(nk_queue_t* queue);
-void nk_queue_free(nk_queue_t* queue);
-void* nk_queue_pop(nk_queue_t* queue);
-void nk_queue_push(nk_queue_t* queue, void* value);
-
-#endif // _NYANKO_ATOMIC_H
+#endif // _NK_ATOMIC_H

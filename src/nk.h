@@ -1,69 +1,83 @@
-#ifndef _NYANKO_H
-#define _NYANKO_H
+#ifndef _NK_H
+#define _NK_H
 
-#include <stdint.h>
-#include <stddef.h>
-#include <stdbool.h>
-
+// platform detection
 #if defined(_WIN32) || defined(_WIN64)
 #define NK_WINDOWS
 #elif defined(__linux__)
 #define NK_LINUX
+#else
+#error "Platform not supported"
 #endif
 
-#define NK_FALSE  (NK_INT | 0)
-#define NK_TRUE   (NK_INT | 1)
-#define NK_NULL   (0xfff8ULL << 48)
-#define NK_INT    ((0xfff0ULL | 0) << 48)
-#define NK_DATA   ((0xfff0ULL | 1) << 48)
-#define NK_FUNC   ((0xfff0ULL | 2) << 48)
-#define NK_ARRAY  ((0xfff0ULL | 3) << 48)
-#define NK_STRING ((0xfff0ULL | 4) << 48)
-#define NK_OBJECT ((0xfff0ULL | 5) << 48)
+// includes
+#include <stdint.h>
+#include <stddef.h>
+#include <stdbool.h>
 
-#define NK_TYPE(v) ((v) & (0b111ULL << 48))
-#define nk_is_null(v) ((v) == NK_NULL)
-#define nk_is_float(v) ((v) < NK_NULL)
-#define nk_is_int(v) (NK_TYPE(v) == NK_INT)
-#define nk_is_data(v) (NK_TYPE(v) == NK_DATA)
-#define nk_is_func(v) (NK_TYPE(v) == NK_FUNC)
-#define nk_is_array(v) (NK_TYPE(v) == NK_ARRAY)
-#define nk_is_string(v) (NK_TYPE(v) == NK_STRING)
-#define nk_is_object(v) (NK_TYPE(v) == NK_OBJECT)
-#define nk_is_ptr(v) (!(nk_is_float(v) || nk_is_int(v) || nk_is_null(v)))
-
-typedef uint64_t nk_value;
-typedef struct nk_actor_t nk_actor_t;
-typedef union { double f; nk_value v; } nk_float_t;
-typedef struct { nk_value key; nk_value value; } nk_cell_t;
+// values structures
+typedef double nk_value;
+typedef uint32_t nk_slot_t;
+typedef struct { uint32_t size; uint8_t* data; } nk_string_t;
 typedef struct { uint32_t size; nk_value* data; } nk_array_t;
-typedef struct { uint32_t size; unsigned char* data; } nk_string_t;
-typedef struct { size_t size; size_t capacity; nk_cell_t* cells; } nk_obj_t;
+typedef struct { uint32_t index; nk_value key; nk_value val; void* ptr; } nk_map_iter_t;
 
-#define nk_alloc_data nk_alloc
-nk_value nk_alloc_array(uint32_t size);
+// constants
+#define NK_TYPE_INT    1
+#define NK_TYPE_MAP    2
+#define NK_TYPE_FUNC   3
+#define NK_TYPE_PORT   4
+#define NK_TYPE_DATA   5
+#define NK_TYPE_ARRAY  6
+#define NK_TYPE_STRING 7
+#define NK_NULL NK_VALUE(0, 0)
+#define NK_TRUE NK_VALUE(NK_TYPE_INT, 1)
+#define NK_FALSE NK_VALUE(NK_TYPE_INT, 0)
+
+// internal conversions
+#define NK_INT(v) (*((int32_t*) &(v)))
+#define NK_UPTR(v) (*((uintptr_t*) &(v)))
+#define NK_TYPE(v) ((((uint8_t*) &(v))[6]) & 0b111)
+#define NK_PTR(type, v) ((type)(NK_UPTR(v) & 0xffffffffffffULL))
+#define NK_VALUE(type, data) (((0xfff8UL | (type)) << 48) | (data))
+#define NK_SLOT_PTR(v) (NK_PTR(uint8_t*, v) - sizeof(nk_slot_t))
+#define NK_REAL_PTR(v) (NK_PTR(uint8_t*, v) - sizeof(nk_slot_t) - sizeof(uint8_t))
+
+// type checking
+#define nk_is_int(v) (NK_TYPE(v) == NK_TYPE_INT)
+#define nk_is_map(v) (NK_TYPE(v) == NK_TYPE_MAP)
+#define nk_is_func(v) (NK_TYPE(v) == NK_TYPE_FUNC)
+#define nk_is_data(v) (NK_TYPE(v) == NK_TYPE_DATA)
+#define nk_is_port(v) (NK_TYPE(v) == NK_TYPE_PORT)
+#define nk_is_array(v) (NK_TYPE(v) == NK_TYPE_ARRAY)
+#define nk_is_string(v) (NK_TYPE(v) == NK_TYPE_STRING)
+#define nk_is_float(v) (NK_UPTR(v) < (0xfff8ULL << 48))
+#define nk_is_ptr(v) (!(nk_is_float(v) || nk_is_int(v)))
+#define nk_is_shared(v) (nk_is_ptr(v) && *NK_REAL_PTR(v))
+
+// allocation
+nk_value nk_alloc_data(size_t bytes);
+nk_value nk_alloc_array(uint32_t items);
 nk_value nk_alloc_string(uint32_t bytes);
-nk_value nk_alloc_object(nk_value proto);
-inline nk_value nk_alloc_int(int32_t v) { return ((nk_value)v) | NK_INT; }
-inline nk_value nk_alloc_float(double f) { nk_float_t t = { .f = f }; return t.v; }
+nk_value nk_alloc_map(uint32_t init_size);
+inline nk_value nk_alloc_float(double v) { return v; }
+inline nk_value nk_alloc_int(int32_t v) { return NK_VALUE(NK_TYPE_INT, v); }
 
-void* nk_ptr(nk_value v);
-#define nk_int(v) ((int32_t)(v))
-nk_value nk_from_ptr(void* ptr, nk_value type);
-bool nk_array(nk_value v, nk_array_t* array);
-bool nk_string(nk_value v, nk_string_t* string);
-inline double nk_float(nk_value v) { nk_float_t t = { .v = v }; return t.f; }
+// data interaction
+bool nk_get_array(nk_value value, nk_array_t* array);
+bool nk_get_string(nk_value value, nk_string_t* string);
+nk_value nk_map_get(nk_value map, nk_value key);
+nk_value nk_map_drop(nk_value map, nk_value key);
+void nk_map_iter_init(nk_value map, nk_map_iter_t* it);
+bool nk_map_iter_has_next(nk_value map, nk_map_iter_t* it);
+nk_value nk_map_set(nk_value map, nk_value key, nk_value val);
+inline double nk_get_float(nk_value value) { return value; }
+inline int32_t nk_get_int(nk_value value) { return NK_INT(value); }
 
-void nk_free(nk_value value);
-void  nk_gcollect(bool major);
-nk_value nk_alloc(size_t bytes);
-nk_value nk_realloc(nk_value value, size_t bytes);
-
+// misc.
+void nk_gcollect();
 nk_value nk_this();
-nk_actor_t* nk_actor_this();
-void nk_actor_free(nk_actor_t* actor);
-nk_value nk_actor_id(nk_actor_t* actor);
-bool nk_actor_send(nk_actor_t* actor, nk_value value);
-nk_actor_t* nk_actor_spawn(nk_value func, nk_value* args, int n_args);
+uint32_t nk_hash(nk_value value);
+void nk_send(nk_value actor_id, nk_value value);
 
-#endif // _NYANKO_H
+#endif // _NK_H

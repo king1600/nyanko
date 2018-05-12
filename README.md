@@ -1,2 +1,2 @@
-# nyanko
-A performant alternative using actors to Neko VM
+# Nyanko VM
+An actor based, concurrent, language virtual machine

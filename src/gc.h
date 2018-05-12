@@ -1,21 +1,27 @@
-#ifndef _NYANKO_GC_H
-#define _NYANKO_GC_H
+#ifndef _NK_GC_H
+#define _NK_GC_H
 
 #include "nk.h"
-#include "atomic.h"
+#include "map.h"
 
 typedef struct {
-    void** heap;
-    bool barrier;
-    nk_ring_t grays;
-    uint64_t* heap_map;
-    uint32_t heap_size;
+    uint64_t* heap;
+    uint64_t* bitmap;
+    uint64_t* refmap;
+    uint32_t bm_size;
+    nk_imap_t shared;
 } nk_gc_t;
 
-void nk_gc_free(nk_gc_t* actor, nk_value value);
-nk_value nk_gc_alloc(nk_gc_t* actor, size_t bytes);
-nk_value nk_gc_realloc(nk_gc_t* actor, nk_value value, size_t bytes);
+void nk_gc_init(nk_gc_t* gc);
 
-void nk_gc_collect(nk_actor_t* actor, bool major);
+void nk_gc_free(nk_gc_t* gc);
 
-#endif // _NYANKO_GC_H
+bool nk_gc_collect(nk_gc_t* gc);
+
+void nk_gc_share(nk_gc_t* gc, nk_value value);
+
+bool nk_gc_alloc_shared(nk_gc_t* gc, nk_value value);
+
+nk_value nk_gc_alloc(nk_gc_t* gc, uint8_t type, size_t bytes);
+
+#endif // _NK_GC_H
