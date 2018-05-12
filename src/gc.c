@@ -159,10 +159,14 @@ bool nk_gc_collect(nk_gc_t* gc) {
     uint8_t* ptr;
     nk_value value;
     uint64_t unreachable;
+    bool has_survivors = false;
 
     for (uint32_t row = 0; row < gc->bm_size; row++) {
         unreachable = gc->bitmap[row] & ~gc->refmap[row];
         gc->bitmap[row] ^= unreachable;
+
+        if (!has_survivors && unreachable)
+            has_survivors = true;
 
         while (unreachable) {
             bitpos = NK_FIRST_BIT(unreachable) - 1;
@@ -184,6 +188,7 @@ bool nk_gc_collect(nk_gc_t* gc) {
         }
     }
 
-    nk_gc_compact(gc);
+    if (has_survivors)
+        nk_gc_compact(gc);
     return true;
 }

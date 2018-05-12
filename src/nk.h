@@ -35,8 +35,10 @@ typedef struct { uint32_t index; nk_value key; nk_value val; void* ptr; } nk_map
 #define NK_FALSE NK_VALUE(NK_TYPE_INT, 0)
 
 // internal conversions
+#define NK_FROM(v) *((nk_value*) &(v))
 #define NK_INT(v) (*((int32_t*) &(v)))
 #define NK_UPTR(v) (*((uintptr_t*) &(v)))
+#define NK_TO_64(v) (*((uint64_t*) &(v)))
 #define NK_TYPE(v) ((((uint8_t*) &(v))[6]) & 0b111)
 #define NK_PTR(type, v) ((type)(NK_UPTR(v) & 0xffffffffffffULL))
 #define NK_VALUE(type, data) (((0xfff8UL | (type)) << 48) | (data))
@@ -57,9 +59,9 @@ typedef struct { uint32_t index; nk_value key; nk_value val; void* ptr; } nk_map
 
 // allocation
 nk_value nk_alloc_data(size_t bytes);
+nk_value nk_alloc_map(bool is_chained);
 nk_value nk_alloc_array(uint32_t items);
 nk_value nk_alloc_string(uint32_t bytes);
-nk_value nk_alloc_map(uint32_t init_size);
 inline nk_value nk_alloc_float(double v) { return v; }
 inline nk_value nk_alloc_int(int32_t v) { return NK_VALUE(NK_TYPE_INT, v); }
 
@@ -70,7 +72,7 @@ nk_value nk_map_get(nk_value map, nk_value key);
 nk_value nk_map_drop(nk_value map, nk_value key);
 void nk_map_iter_init(nk_value map, nk_map_iter_t* it);
 bool nk_map_iter_has_next(nk_value map, nk_map_iter_t* it);
-nk_value nk_map_set(nk_value map, nk_value key, nk_value val);
+nk_value nk_map_put(nk_value map, nk_value key, nk_value val);
 inline double nk_get_float(nk_value value) { return value; }
 inline int32_t nk_get_int(nk_value value) { return NK_INT(value); }
 

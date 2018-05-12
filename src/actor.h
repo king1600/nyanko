@@ -9,7 +9,7 @@ typedef struct {
     nk_value* sp;
     nk_value* stack;
     size_t stack_size;
-    nk_value x, y, z;
+    nk_value registers[8]; 
 } nk_frame_t;
 
 typedef struct nk_msgq_node_t nk_msgq_node_t;
@@ -24,7 +24,9 @@ typedef struct {
     nk_msgq_t mailbox;
 } nk_actor_t;
 
-void nk_actor_init(nk_actor_t* actor);
+nk_actor_t* nk_actor_spawn();
+
+nk_actor_t* nk_actor_this(nk_actor_t* set);
 
 void nk_actor_free(nk_actor_t* actor);
 

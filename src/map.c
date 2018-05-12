@@ -1,5 +1,7 @@
+#include "gc.h"
 #include "map.h"
 #include "alloc.h"
+#include "actor.h"
 
 static inline uint32_t nk_hash_int(uint32_t x) {
     x = ((x >> 16) ^ x) * 0x45d9f3b;
@@ -241,7 +243,7 @@ uint64_t nk_imap_put(nk_imap_t* map, uint64_t key, uint64_t value, uint64_t none
 }
 
 void nk_imap_free(nk_imap_t* map) {
-    if (NK_UNLIKELY(!map->cells))
+    if (!map->cells)
         return;
 
     if (map->is_chained) {
@@ -251,4 +253,88 @@ void nk_imap_free(nk_imap_t* map) {
     }
 
     NK_FREE(map->cells);
+}
+
+nk_value nk_alloc_map(bool is_chained) {
+    nk_gc_t* gc = &(nk_actor_this(NULL)->gc);
+    nk_value value = nk_gc_alloc(gc, NK_TYPE_MAP, sizeof(nk_imap_t));
+    nk_imap_init(NK_PTR(nk_imap_t*, value), is_chained, 8);
+    return value;
+}
+
+#define NK_MAP_ACCESS(call)           \
+    nk_value null = NK_NULL;          \
+    if (NK_UNLIKELY(!nk_is_map(map))) \
+        return null;                  \
+    uint64_t ret = call;              \
+    return NK_TO_64(ret)
+
+nk_value nk_map_get(nk_value map, nk_value key) {
+    NK_MAP_ACCESS(nk_imap_get(NK_PTR(nk_imap_t*, map),
+        NK_TO_64(key), NK_TO_64(null)));
+}
+
+nk_value nk_map_drop(nk_value map, nk_value key) {
+    NK_MAP_ACCESS(nk_imap_drop(NK_PTR(nk_imap_t*, map),
+        NK_TO_64(key), NK_TO_64(null)));
+}
+
+nk_value nk_map_put(nk_value map, nk_value key, nk_value val) {
+    NK_MAP_ACCESS(nk_imap_put(NK_PTR(nk_imap_t*, map),
+        NK_TO_64(key), NK_TO_64(val), NK_TO_64(null)));
+}
+
+void nk_map_iter_init(nk_value map, nk_map_iter_t* it) {
+    if (NK_UNLIKELY(!nk_is_map(map)))
+        return;
+    it->index = 0;
+    it->ptr = NULL;
+    nk_map_iter_has_next(map, it);
+}
+
+bool nk_map_iter_has_next(nk_value value, nk_map_iter_t* it) {
+    if (NK_UNLIKELY(!nk_is_map(value)))
+        return false;
+
+    nk_imap_t* map = NK_PTR(nk_imap_t*, value);
+    if (!map->cells || it->index >= map->capacity)
+        return false;
+
+    if (map->is_chained) {
+        nk_cell_chain_t* cell = NULL;
+        nk_cell_chain_t** cells = (nk_cell_chain_t**) map->cells;
+
+        while (true) {
+            if (it->ptr == NULL) {
+                while (cell == NULL && it->index < map->capacity)
+                    cell = cells[it->index++];
+                if (cell == NULL)
+                    return false;
+                it->key = cell->key;
+                it->val = cell->value;
+                it->ptr = (void*) cell;
+
+            } else {
+                cell = (nk_cell_chain_t*) it->ptr;
+                it->ptr = (void*) (cell = cell->next);
+                if (cell == NULL)
+                    continue;
+                it->key = cell->key;
+                it->val = cell->value;
+            }
+        }
+
+    } else {
+        nk_cell_t** cells = (nk_cell_t**) map->cells;
+        for (nk_cell_t* cell = cells[it->index]; it->index < map->capacity; it->index++) {
+            if (cell != NULL && cell != NK_PROBE_CELL_DELETED) {
+                it->index++;
+                it->key = cell->key;
+                it->val = cell->value;
+                return true;
+            }
+        }
+    }
+
+    return false;
 }
