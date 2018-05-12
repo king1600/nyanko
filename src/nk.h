@@ -18,6 +18,7 @@
 // values structures
 typedef double nk_value;
 typedef uint32_t nk_slot_t;
+typedef struct nk_actor_t nk_actor_t;
 typedef struct { uint32_t size; uint8_t* data; } nk_string_t;
 typedef struct { uint32_t size; nk_value* data; } nk_array_t;
 typedef struct { uint32_t index; nk_value key; nk_value val; void* ptr; } nk_map_iter_t;

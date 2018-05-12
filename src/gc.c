@@ -1,6 +1,5 @@
-#include "gc.h"
 #include "alloc.h"
-#include "atomic.h"
+#include "actor.h"
 #include <string.h>
 
 #define NK_SLOT_SIZE sizeof(nk_slot_t)
@@ -30,15 +29,22 @@
     }                                                       \
     } while (0)
 
-void nk_gc_init(nk_gc_t* gc) {
-    gc->bm_size = 0;
+////////////////// GC Allocation   ////////////////////////
+
+void nk_gc_init(nk_actor_t* actor) {
+    nk_gc_t* gc = &actor->gc;
     nk_imap_init(&gc->shared, true, 8);
+
+    gc->bm_size = 0;
     gc->heap = gc->bitmap = gc->refmap = NULL;
 }
 
-void nk_gc_free(nk_gc_t* gc) {
-    nk_gc_collect(gc);
+void nk_gc_free(nk_actor_t* actor) {
+    nk_gc_t* gc = &actor->gc;
+
+    nk_gc_collect(actor);
     nk_imap_free(&gc->shared);
+
     if (gc->heap) {
         NK_FREE(gc->heap);
         NK_FREE(gc->bitmap);
@@ -64,50 +70,54 @@ static inline bool nk_gc_grow(nk_gc_t* gc) {
     return false; 
 }
 
-static inline nk_slot_t nk_gc_alloc_slot(nk_gc_t* gc, bool* is_full) {
+static inline nk_slot_t nk_gc_alloc_slot(nk_actor_t* actor, nk_gc_t* gc, bool* is_full) {
     int bitpos;
     uint64_t* bitmap;
 
     if (NK_UNLIKELY(!gc->heap))
         nk_gc_grow(gc);
 
-    bitmap = gc->bitmap;
-    for (uint64_t row = 0; row < gc->bm_size; row++) {
+    while (true) {
+        bitmap = gc->bitmap;
+        for (uint64_t row = 0; row < gc->bm_size; row++) {
 
-        if (!(*bitmap)) {
-            *bitmap = 1;
-            return row * NK_GC_BITS;
+            if (!(*bitmap)) {
+                *bitmap = 1;
+                return row * NK_GC_BITS;
+            }
+
+            if (*bitmap == UINT64_MAX) {
+                bitmap++;
+                continue;
+            }
+
+            bitpos = NK_FIRST_BIT(~(*bitmap)) - 1;
+            *bitmap |= 1ULL << bitpos;
+            return (row * NK_GC_BITS) + bitpos;
         }
 
-        if (*bitmap == UINT64_MAX) {
-            bitmap++;
-            continue;
-        }
-
-        bitpos = NK_FIRST_BIT(~(*bitmap)) - 1;
-        *bitmap |= 1ULL << bitpos;
-        return (row * NK_GC_BITS) + bitpos;
+        if ((*is_full = nk_gc_collect(actor)))
+            return 0;
     }
-
-    if ((*is_full = nk_gc_collect(gc)))
-        return 0;
-    return nk_gc_alloc_slot(gc, is_full);
+    NK_UNREACHABLE();
 }
 
-#define NK_GC_ALLOC_PROLOG(gc, ret_val)              \
-    bool is_full = false;                            \
-    nk_slot_t slot = nk_gc_alloc_slot(gc, &is_full); \
+#define NK_GC_ALLOC_PROLOG(actor, gc, ret_val)              \
+    bool is_full = false;                                   \
+    nk_slot_t slot = nk_gc_alloc_slot(actor, gc, &is_full); \
     if (is_full) return ret_val
 
-bool nk_gc_alloc_shared(nk_gc_t* gc, nk_value value) {
-    NK_GC_ALLOC_PROLOG(gc, false);
+bool nk_gc_alloc_shared(nk_actor_t* actor, nk_value value) {
+    nk_gc_t* gc = &actor->gc;
+    NK_GC_ALLOC_PROLOG(actor, gc, false);
+
     nk_imap_put(&gc->shared, NK_PTR(uint64_t, value), (uint64_t) slot, 0);
     return true;
 }
 
-// allocate typed memory on the gc
-nk_value nk_gc_alloc(nk_gc_t* gc, uint8_t type, size_t bytes) {
-    NK_GC_ALLOC_PROLOG(gc, NK_NULL);
+nk_value nk_gc_alloc(nk_actor_t* actor, uint8_t type, size_t bytes) {
+    nk_gc_t* gc = &actor->gc;
+    NK_GC_ALLOC_PROLOG(actor, gc, NK_NULL);
 
     uint8_t* value_ptr = (uint8_t*) NK_MALLOC(NK_SLOT_SIZE + bytes + 1);
     nk_slot_t* slot_ptr = (nk_slot_t*) (value_ptr + 1);
@@ -117,7 +127,7 @@ nk_value nk_gc_alloc(nk_gc_t* gc, uint8_t type, size_t bytes) {
     return *((nk_value*) &gc->heap[slot]);
 }
 
-void nk_gc_share(nk_gc_t* gc, nk_value value) {
+void nk_gc_share(nk_actor_t* actor, nk_value value) {
     if (nk_is_shared(value))
         return;
 
@@ -125,7 +135,41 @@ void nk_gc_share(nk_gc_t* gc, nk_value value) {
     *((nk_slot_t*) (ptr + 1)) = 1;
     *ptr = 1;
 
-    NK_GC_TRAVERSE(value, nk_gc_share(gc, value));
+    NK_GC_TRAVERSE(value, nk_gc_share(actor, value));
+}
+
+////////////////// GC Collection   ////////////////////////
+
+static bool nk_gc_mark(nk_gc_t* gc, nk_value obj) {
+    if (!nk_is_ptr(obj))
+        return false;
+    
+    nk_slot_t slot = *NK_SLOT_PTR(obj);
+    if (NK_GC_IS_SET(gc->refmap, slot))
+        return false;
+
+    NK_GC_TOGGLE(gc->refmap, slot);
+    NK_GC_TRAVERSE(obj, nk_gc_mark(gc, value));
+    return true;
+}
+
+static inline bool nk_gc_mark_roots(nk_actor_t* actor, nk_gc_t* gc) {
+    bool marked = false;
+    nk_frame_t* frame = &actor->frame;
+    if (NK_UNLIKELY(!frame->stack))
+        return false;
+
+    size_t size = NK_NUM_REGISTERS;
+    while (size--)
+        if (nk_gc_mark(gc, frame->registers[size]) && !marked)
+            marked = true;
+
+    size = frame->stack_size;
+    while (size--)
+        if (nk_gc_mark(gc, frame->stack[size]) && !marked)
+            marked = true;
+
+    return marked;
 }
 
 static inline void nk_gc_compact(nk_gc_t* gc) {
@@ -154,19 +198,24 @@ static inline void nk_gc_compact(nk_gc_t* gc) {
     }
 }
 
-bool nk_gc_collect(nk_gc_t* gc) {
+static inline bool nk_gc_sweep(nk_gc_t* gc, bool* had_survivors) {
     int bitpos;
     uint8_t* ptr;
     nk_value value;
+    bool is_full = true;
     uint64_t unreachable;
-    bool has_survivors = false;
+    *had_survivors = false;
 
     for (uint32_t row = 0; row < gc->bm_size; row++) {
         unreachable = gc->bitmap[row] & ~gc->refmap[row];
         gc->bitmap[row] ^= unreachable;
 
-        if (!has_survivors && unreachable)
-            has_survivors = true;
+        if (!unreachable)
+            continue;
+        if (is_full)
+            is_full = false;
+        if (!(*had_survivors))
+            *had_survivors = true;
 
         while (unreachable) {
             bitpos = NK_FIRST_BIT(unreachable) - 1;
@@ -188,7 +237,22 @@ bool nk_gc_collect(nk_gc_t* gc) {
         }
     }
 
-    if (has_survivors)
-        nk_gc_compact(gc);
-    return true;
+    if (is_full)
+        return nk_gc_grow(gc);
+    return false;
+} 
+
+// returns if the GC is out of memory
+bool nk_gc_collect(nk_actor_t* actor) {
+    bool had_survivors;
+    nk_gc_t* gc = &actor->gc;
+
+    if (nk_gc_mark_roots(actor, gc)) {
+        if (nk_gc_sweep(gc, &had_survivors))
+            return true;
+        if (had_survivors)
+            nk_gc_compact(gc);
+    }
+
+    return false;
 }

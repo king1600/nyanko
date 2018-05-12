@@ -4,12 +4,14 @@
 #include "gc.h"
 #include "atomic.h"
 
+#define NK_NUM_REGISTERS 8
+
 typedef struct {
     nk_value* bp;
     nk_value* sp;
     nk_value* stack;
     size_t stack_size;
-    nk_value registers[8]; 
+    nk_value registers[NK_NUM_REGISTERS]; 
 } nk_frame_t;
 
 typedef struct nk_msgq_node_t nk_msgq_node_t;
@@ -18,17 +20,17 @@ typedef struct {
     NK_ATOMIC(nk_msgq_node_t*) tail;
 } nk_msgq_t;
 
-typedef struct {
+struct nk_actor_t {
     nk_gc_t gc;
     nk_frame_t frame;
     nk_msgq_t mailbox;
-} nk_actor_t;
+};
 
 nk_actor_t* nk_actor_spawn();
 
-nk_actor_t* nk_actor_this(nk_actor_t* set);
-
 void nk_actor_free(nk_actor_t* actor);
+
+nk_actor_t* nk_actor_this(nk_actor_t* set);
 
 nk_value nk_actor_recv(nk_actor_t* actor);
 
