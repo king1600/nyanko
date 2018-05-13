@@ -36,6 +36,7 @@ void nk_gc_init(nk_actor_t* actor) {
     nk_imap_init(&gc->shared, true, 8);
 
     gc->bm_size = 0;
+    gc->last_row = 0;
     gc->heap = gc->bitmap = gc->refmap = NULL;
 }
 
@@ -79,11 +80,11 @@ static inline nk_slot_t nk_gc_alloc_slot(nk_actor_t* actor, nk_gc_t* gc, bool* i
 
     while (true) {
         bitmap = gc->bitmap;
-        for (uint64_t row = 0; row < gc->bm_size; row++) {
+        for (; gc->last_row < gc->bm_size; gc->last_row++) {
 
             if (!(*bitmap)) {
                 *bitmap = 1;
-                return row * NK_GC_BITS;
+                return gc->last_row * NK_GC_BITS;
             }
 
             if (*bitmap == UINT64_MAX) {
@@ -93,7 +94,7 @@ static inline nk_slot_t nk_gc_alloc_slot(nk_actor_t* actor, nk_gc_t* gc, bool* i
 
             bitpos = NK_FIRST_BIT(~(*bitmap)) - 1;
             *bitmap |= 1ULL << bitpos;
-            return (row * NK_GC_BITS) + bitpos;
+            return (gc->last_row * NK_GC_BITS) + bitpos;
         }
 
         if ((*is_full = nk_gc_collect(actor)))
@@ -196,6 +197,8 @@ static inline void nk_gc_compact(nk_gc_t* gc) {
             }
         }
     }
+
+    gc->last_row = 0;
 }
 
 static inline bool nk_gc_sweep(nk_gc_t* gc, bool* had_survivors) {

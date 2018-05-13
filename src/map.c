@@ -256,8 +256,7 @@ void nk_imap_free(nk_imap_t* map) {
 }
 
 nk_value nk_alloc_map(bool is_chained) {
-    nk_gc_t* gc = &(nk_actor_this(NULL)->gc);
-    nk_value value = nk_gc_alloc(gc, NK_TYPE_MAP, sizeof(nk_imap_t));
+    nk_value value = nk_gc_alloc(nk_actor_this(NULL), NK_TYPE_MAP, sizeof(nk_imap_t));
     nk_imap_init(NK_PTR(nk_imap_t*, value), is_chained, 8);
     return value;
 }

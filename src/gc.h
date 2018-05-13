@@ -9,6 +9,7 @@ typedef struct {
     uint64_t* bitmap;
     uint64_t* refmap;
     uint32_t bm_size;
+    uint32_t last_row;
     nk_imap_t shared;
 } nk_gc_t;
 
