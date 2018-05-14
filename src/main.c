@@ -1,27 +1,26 @@
 #include "alloc.h"
-#include "scheduler.h"
+#include "vm.h"
 #include <stdio.h>
 #include <string.h>
 
 int main(int argc, char* argv[]) {
-    NK_MEM_INIT();
-    NK_MEM_THREAD_INIT();
-
-    nk_mpmc_queue_t queue;
-    nk_mpmc_queue_init(&queue);
-
-    nk_mpmc_queue_push(&queue, (void*)1);
-    nk_mpmc_queue_push(&queue, (void*)2);
-    nk_mpmc_queue_push(&queue, (void*)3);
-
-    void* data;
-    while ((data = nk_mpmc_queue_pop(&queue)) != NULL)
-        printf("%p\n", data);
-
-    nk_mpmc_queue_free(&queue);
-
-    NK_MEM_THREAD_FREE();
-    NK_MEM_FREE();
+    nk_vm_t vm;
+    nk_vm_init(&vm, -1, -1);
+    nk_vm_this(&vm);
     
+    nk_actor_t* a = nk_actor_spawn();
+
+    nk_actor_send(a, NK_VALUE(NK_TYPE_INT, 0));
+    nk_actor_send(a, NK_VALUE(NK_TYPE_INT, 1));
+    nk_actor_send(a, NK_VALUE(NK_TYPE_INT, 2));
+
+    for (nk_value v = nk_actor_recv(a); !nk_is_null(v); v = nk_actor_recv(a)) {
+        printf("%d\n", nk_get_int(v));
+    }
+    
+
+    nk_actor_free(a);
+
+    nk_vm_free(&vm);
     return 0;
 }

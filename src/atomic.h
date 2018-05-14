@@ -19,7 +19,7 @@
 #define nk_atomic_add(ptr, val, mo) __atomic_fetch_add(ptr, val, mo)
 #define nk_atomic_sub(ptr, val, mo) __atomic_fetch_sub(ptr, val, mo)
 #define nk_atomic_store(ptr, val, mo) __atomic_store_n(ptr, val, mo)
-#define nk_atomic_swap(ptr, val, mo) __atomic_exchange_n(ptr, val, mo)
+#define nk_atomic_xchg(ptr, val, mo) __atomic_exchange_n(ptr, val, mo)
 #define nk_atomic_cas_weak(ptr, exp, des, succ, fail) __atomic_compare_exchange_n(ptr, exp, des, true, succ, fail)
 #define nk_atomic_cas_strong(ptr, exp, des, succ, fail) __atomic_compare_exchange_n(ptr, exp, des, false, succ, fail)
 

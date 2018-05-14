@@ -4,9 +4,13 @@
 #include "actor.h"
 
 #ifdef NK_WINDOWS
-#define NK_ABA_SIZE __int128_t
+    #include <windows.h>
+    #define NK_ABA_SIZE __int128_t
+    #define nk_sched_yield SwitchToThread
 #else
-#define NK_ABA_SIZE int64_t
+    #include <sched.h>
+    #define NK_ABA_SIZE int64_t
+    #define nk_sched_yield sched_yield
 #endif
 
 typedef struct nk_mpmc_qnode_t {

@@ -24,6 +24,7 @@ typedef struct { uint32_t size; nk_value* data; } nk_array_t;
 typedef struct { uint32_t index; nk_value key; nk_value val; void* ptr; } nk_map_iter_t;
 
 // constants
+#define NK_TYPE_NULL   0
 #define NK_TYPE_INT    1
 #define NK_TYPE_MAP    2
 #define NK_TYPE_FUNC   3
@@ -31,20 +32,23 @@ typedef struct { uint32_t index; nk_value key; nk_value val; void* ptr; } nk_map
 #define NK_TYPE_DATA   5
 #define NK_TYPE_ARRAY  6
 #define NK_TYPE_STRING 7
-#define NK_NULL NK_VALUE(0, 0)
+#define NK_NULL NK_VALUE(NK_TYPE_NULL, 0)
 #define NK_TRUE NK_VALUE(NK_TYPE_INT, 1)
 #define NK_FALSE NK_VALUE(NK_TYPE_INT, 0)
 
 // internal conversions
-#define NK_FROM(v) *((nk_value*) &(v))
 #define NK_INT(v) (*((int32_t*) &(v)))
+#define NK_FROM(v) (*((nk_value*) &(v)))
 #define NK_UPTR(v) (*((uintptr_t*) &(v)))
 #define NK_TO_64(v) (*((uint64_t*) &(v)))
 #define NK_TYPE(v) ((((uint8_t*) &(v))[6]) & 0b111)
 #define NK_PTR(type, v) ((type)(NK_UPTR(v) & 0xffffffffffffULL))
-#define NK_VALUE(type, data) (((0xfff8UL | (type)) << 48) | (data))
 #define NK_SLOT_PTR(v) (NK_PTR(uint8_t*, v) - sizeof(nk_slot_t))
 #define NK_REAL_PTR(v) (NK_PTR(uint8_t*, v) - sizeof(nk_slot_t) - sizeof(uint8_t))
+static inline nk_value NK_VALUE(int type, uintptr_t data) {
+    uint64_t value = ((0xfff8ULL | type) << 48) | data;
+    return NK_FROM(value);
+}
 
 // type checking
 #define nk_is_int(v) (NK_TYPE(v) == NK_TYPE_INT)
@@ -52,6 +56,7 @@ typedef struct { uint32_t index; nk_value key; nk_value val; void* ptr; } nk_map
 #define nk_is_func(v) (NK_TYPE(v) == NK_TYPE_FUNC)
 #define nk_is_data(v) (NK_TYPE(v) == NK_TYPE_DATA)
 #define nk_is_port(v) (NK_TYPE(v) == NK_TYPE_PORT)
+#define nk_is_null(v) (NK_TYPE(v) == NK_TYPE_NULL)
 #define nk_is_array(v) (NK_TYPE(v) == NK_TYPE_ARRAY)
 #define nk_is_string(v) (NK_TYPE(v) == NK_TYPE_STRING)
 #define nk_is_float(v) (NK_UPTR(v) < (0xfff8ULL << 48))

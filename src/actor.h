@@ -22,6 +22,8 @@ typedef struct {
 
 struct nk_actor_t {
     nk_gc_t gc;
+    uint32_t refc;
+    uint8_t active;
     nk_frame_t frame;
     nk_msgq_t mailbox;
 };
