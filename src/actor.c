@@ -1,12 +1,12 @@
 #include "alloc.h"
 #include "actor.h"
 
-NK_THREAD_LOCAL nk_actor_t* __this_actor = NULL;
+NK_THREAD_LOCAL nk_actor_t* __nk_actor = NULL;
 
 nk_actor_t* nk_actor_this(nk_actor_t* set) {
     if (set != NULL)
-        __this_actor = set;
-    return __this_actor;
+        __nk_actor = set;
+    return __nk_actor;
 }
 
 nk_actor_t* nk_actor_spawn() {

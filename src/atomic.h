@@ -4,12 +4,8 @@
 #include <stdint.h>
 #include <stdatomic.h>
 
-#define NK_ATOMIC(T) T _Atomic
-#ifdef NK_WINDOWS
-#define NK_DWORD __int128_t
-#else
-#define NK_DWORD int64_t
-#endif
+#define NK_ATOMIC(T) T volatile
+#define NK_ALIGN(s) __attribute__((aligned(s)))
 
 #define NK_ATOMIC_RELAXED __ATOMIC_RELAXED
 #define NK_ATOMIC_CONSUME __ATOMIC_CONSUME

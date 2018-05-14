@@ -2,6 +2,7 @@
 #include "actor.h"
 #include <string.h>
 
+#define NK_SLOT_MAX ((nk_slot_t) -1)
 #define NK_SLOT_SIZE sizeof(nk_slot_t)
 #define NK_GC_BITS (sizeof(uint64_t) << 3)
 #define NK_GC_INDEX(map, slot) (map)[(slot) / NK_GC_BITS]
@@ -142,13 +143,20 @@ void nk_gc_share(nk_actor_t* actor, nk_value value) {
 ////////////////// GC Collection   ////////////////////////
 
 static bool nk_gc_mark(nk_gc_t* gc, nk_value obj) {
+    nk_slot_t slot;
     if (!nk_is_ptr(obj))
         return false;
+
+    if (nk_is_shared(obj)) {
+        slot = (nk_slot_t) nk_imap_get(&gc->shared, NK_PTR(uint64_t, obj), NK_SLOT_MAX);
+        if (NK_UNLIKELY(slot == NK_SLOT_MAX))
+            return false;
+    } else {
+        slot = *NK_SLOT_PTR(obj);
+    }
     
-    nk_slot_t slot = *NK_SLOT_PTR(obj);
     if (NK_GC_IS_SET(gc->refmap, slot))
         return false;
-
     NK_GC_TOGGLE(gc->refmap, slot);
     NK_GC_TRAVERSE(obj, nk_gc_mark(gc, value));
     return true;
