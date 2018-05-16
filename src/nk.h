@@ -19,20 +19,20 @@
 typedef double nk_value;
 typedef uint32_t nk_slot_t;
 typedef struct nk_actor_t nk_actor_t;
+typedef struct { uint32_t size; nk_value* data; } nk_list_t;
 typedef struct { uint32_t size; uint8_t* data; } nk_string_t;
-typedef struct { uint32_t size; nk_value* data; } nk_array_t;
 typedef struct { uint32_t index; nk_value key; nk_value val; void* ptr; } nk_map_iter_t;
 
 // constants
-#define NK_TYPE_NULL   0
-#define NK_TYPE_INT    1
-#define NK_TYPE_MAP    2
-#define NK_TYPE_FUNC   3
-#define NK_TYPE_PORT   4
-#define NK_TYPE_DATA   5
-#define NK_TYPE_ARRAY  6
+#define NK_TYPE_INT    0
+#define NK_TYPE_MAP    1
+#define NK_TYPE_FUNC   2
+#define NK_TYPE_PORT   3
+#define NK_TYPE_DATA   4
+#define NK_TYPE_ARRAY  5
+#define NK_TYPE_TUPLE  6
 #define NK_TYPE_STRING 7
-#define NK_NULL NK_VALUE(NK_TYPE_NULL, 0)
+#define NK_NULL NK_VALUE(NK_TYPE_DATA, 0)
 #define NK_TRUE NK_VALUE(NK_TYPE_INT, 1)
 #define NK_FALSE NK_VALUE(NK_TYPE_INT, 0)
 
@@ -56,23 +56,26 @@ static inline nk_value NK_VALUE(int type, uintptr_t data) {
 #define nk_is_func(v) (NK_TYPE(v) == NK_TYPE_FUNC)
 #define nk_is_data(v) (NK_TYPE(v) == NK_TYPE_DATA)
 #define nk_is_port(v) (NK_TYPE(v) == NK_TYPE_PORT)
-#define nk_is_null(v) (NK_TYPE(v) == NK_TYPE_NULL)
+#define nk_is_tuple(v) (NK_TYPE(v) == NK_TYPE_TUPLE)
 #define nk_is_array(v) (NK_TYPE(v) == NK_TYPE_ARRAY)
 #define nk_is_string(v) (NK_TYPE(v) == NK_TYPE_STRING)
 #define nk_is_float(v) (NK_UPTR(v) < (0xfff8ULL << 48))
 #define nk_is_ptr(v) (!(nk_is_float(v) || nk_is_int(v)))
 #define nk_is_shared(v) (nk_is_ptr(v) && *NK_REAL_PTR(v))
+#define nk_is_null(v) (NK_TYPE(v) == NK_TYPE_DATA && !NK_INT(v))
 
 // allocation
 nk_value nk_alloc_data(size_t bytes);
 nk_value nk_alloc_map(bool is_chained);
+nk_value nk_alloc_tuple(uint8_t items);
 nk_value nk_alloc_array(uint32_t items);
 nk_value nk_alloc_string(uint32_t bytes);
 inline nk_value nk_alloc_float(double v) { return v; }
 inline nk_value nk_alloc_int(int32_t v) { return NK_VALUE(NK_TYPE_INT, v); }
 
 // data interaction
-bool nk_get_array(nk_value value, nk_array_t* array);
+bool nk_get_tuple(nk_value value, nk_list_t* array);
+bool nk_get_array(nk_value value, nk_list_t* array);
 bool nk_get_string(nk_value value, nk_string_t* string);
 nk_value nk_map_get(nk_value map, nk_value key);
 nk_value nk_map_drop(nk_value map, nk_value key);

@@ -11,23 +11,27 @@
 #define NK_GC_TOGGLE(map, slot) (NK_GC_INDEX(map, slot) ^= NK_GC_SLOT_BIT(slot))
 
 // traverse an nk_value
-#define NK_GC_TRAVERSE(obj, handle) do {                    \
-    nk_value value;                                         \
-    nk_array_t array;                                       \
-    nk_map_iter_t it;                                       \
-    switch (NK_TYPE(obj)) {                                 \
-        case NK_TYPE_ARRAY:                                 \
-            if (NK_LIKELY(nk_get_array(obj, &array)))       \
-                for (uint32_t i = 0; i < array.size; i++) { \
-                    value = array.data[i]; handle;          \
-                }                                           \
-        case NK_TYPE_MAP:                                   \
-            nk_map_iter_init(obj, &it);                     \
-            while (nk_map_iter_has_next(obj, &it)) {        \
-                value = it.key; handle;                     \
-                value = it.val; handle;                     \
-            }                                               \
-    }                                                       \
+#define NK_GC_TRAVERSE(obj, handle) do {                   \
+    uint8_t type;                                          \
+    nk_value value;                                        \
+    nk_list_t list;                                        \
+    nk_map_iter_t it;                                      \
+    switch (type = NK_TYPE(obj)) {                         \
+        case NK_TYPE_TUPLE:                                \
+        case NK_TYPE_ARRAY:                                \
+            if (NK_LIKELY(type == NK_TYPE_TUPLE ?          \
+                nk_get_tuple(obj, &list) :                 \
+                nk_get_array(obj, &list)))                 \
+                for (uint32_t i = 0; i < list.size; i++) { \
+                    value = list.data[i]; handle;          \
+                }                                          \
+        case NK_TYPE_MAP:                                  \
+            nk_map_iter_init(obj, &it);                    \
+            while (nk_map_iter_has_next(obj, &it)) {       \
+                value = it.key; handle;                    \
+                value = it.val; handle;                    \
+            }                                              \
+    }                                                      \
     } while (0)
 
 ////////////////// GC Allocation   ////////////////////////
@@ -36,9 +40,10 @@ void nk_gc_init(nk_actor_t* actor) {
     nk_gc_t* gc = &actor->gc;
     nk_imap_init(&gc->shared, true, 8);
 
+    gc->heap = NULL;
     gc->bm_size = 0;
     gc->last_row = 0;
-    gc->heap = gc->bitmap = gc->refmap = NULL;
+    gc->bitmap = gc->refmap = NULL;
 }
 
 void nk_gc_free(nk_actor_t* actor) {
@@ -61,10 +66,10 @@ static inline bool nk_gc_grow(nk_gc_t* gc) {
     const size_t heap_size = sizeof(uintptr_t) * NK_GC_BITS * gc->bm_size;
 
     if (NK_UNLIKELY(!gc->heap)) {
-        gc->heap = (uint64_t*) NK_CALLOC(heap_size, 1);
+        gc->heap = (nk_value*) NK_CALLOC(heap_size, 1);
         gc->bitmap = (uint64_t*) NK_CALLOC(map_size, 1);
     } else {
-        gc->heap = (uint64_t*) NK_REALLOC((void*) gc->heap, heap_size);
+        gc->heap = (nk_value*) NK_REALLOC((void*) gc->heap, heap_size);
         gc->bitmap = (uint64_t*) NK_REALLOC((void*) gc->bitmap, map_size);
     }
 
@@ -125,8 +130,7 @@ nk_value nk_gc_alloc(nk_actor_t* actor, uint8_t type, size_t bytes) {
     nk_slot_t* slot_ptr = (nk_slot_t*) (value_ptr + 1);
 
     *value_ptr = 0;
-    gc->heap[(*slot_ptr = slot)] = NK_VALUE(type, (uintptr_t) (slot_ptr + 1));
-    return *((nk_value*) &gc->heap[slot]);
+    return gc->heap[(*slot_ptr = slot)] = NK_VALUE(type, (uintptr_t) (slot_ptr + 1));
 }
 
 void nk_gc_share(nk_actor_t* actor, nk_value value) {
@@ -201,7 +205,7 @@ static inline void nk_gc_compact(nk_gc_t* gc) {
             if (move_slot > slot) {
                 NK_GC_TOGGLE(gc->bitmap, slot);
                 NK_GC_TOGGLE(gc->bitmap, move_slot);
-                *NK_SLOT_PTR(*((nk_value*) &gc->heap[slot])) = move_slot;
+                *NK_SLOT_PTR(gc->heap[slot]) = move_slot;
             }
         }
     }
@@ -231,7 +235,7 @@ static inline bool nk_gc_sweep(nk_gc_t* gc, bool* had_survivors) {
         while (unreachable) {
             bitpos = NK_FIRST_BIT(unreachable) - 1;
             unreachable ^= 1ULL << bitpos;
-            value = *((nk_value*) &gc->heap[(row * NK_GC_BITS) + bitpos]);
+            value = gc->heap[(row * NK_GC_BITS) + bitpos];
             ptr = NK_REAL_PTR(value);
             
             if (!(*ptr && nk_atomic_sub(((uint32_t*) &ptr[1]), 1, NK_ATOMIC_RELEASE)))

@@ -5,7 +5,7 @@
 #include "map.h"
 
 typedef struct {
-    uint64_t* heap;
+    nk_value* heap;
     uint64_t* bitmap;
     uint64_t* refmap;
     uint32_t bm_size;

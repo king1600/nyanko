@@ -9,10 +9,13 @@ int main(int argc, char* argv[]) {
     nk_vm_this(&vm);
     
     nk_actor_t* a = nk_actor_spawn();
+    nk_actor_this(a);
 
     nk_actor_send(a, NK_VALUE(NK_TYPE_INT, 0));
     nk_actor_send(a, NK_VALUE(NK_TYPE_INT, 1));
     nk_actor_send(a, NK_VALUE(NK_TYPE_INT, 2));
+
+    nk_alloc_array(69);
 
     for (nk_value v = nk_actor_recv(a); !nk_is_null(v); v = nk_actor_recv(a)) {
         printf("%d\n", nk_get_int(v));
