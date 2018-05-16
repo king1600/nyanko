@@ -13,13 +13,15 @@ void nk_vm_init(nk_vm_t* vm, int num_scheds, int num_asio) {
     NK_MEM_INIT();
     NK_MEM_THREAD_INIT();
 
-    nk_mpmc_queue_init(&vm->idle_scheds);
-    nk_sched_init(&vm->schedulers, num_scheds);
+    nk_mpmc_queue_init(&vm->actors);
+    nk_mpmc_queue_init(&vm->idle_schedulers);
+    nk_sched_init(vm, &vm->schedulers, num_scheds);
 }
 
 void nk_vm_free(nk_vm_t* vm) {
-    nk_mpmc_queue_free(&vm->idle_scheds);
     nk_sched_free(&vm->schedulers);
+    nk_mpmc_queue_free(&vm->actors);
+    nk_mpmc_queue_free(&vm->idle_schedulers);
 
     NK_MEM_THREAD_FREE();
     NK_MEM_FREE();

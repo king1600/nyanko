@@ -36,16 +36,16 @@ void* nk_mpmc_queue_pop(nk_mpmc_queue_t* queue);
 
 void nk_mpmc_queue_push(nk_mpmc_queue_t* queue, void* data);
 
-typedef struct {
-    nk_mpmc_queue_t actors;
-} nk_sched_t;
+//////////////////////////////////////////////////////////////////////
 
 typedef struct {
     size_t size;
-    nk_sched_t* workers;
+    void* workers;
 } nk_schedlist_t;
 
-void nk_sched_init(nk_schedlist_t* list, size_t amount);
+typedef struct nk_vm_t nk_vm_t;
+
+void nk_sched_init(nk_vm_t* vm, nk_schedlist_t* list, size_t amount);
 
 void nk_sched_free(nk_schedlist_t* list);
 
