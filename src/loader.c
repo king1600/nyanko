@@ -10,5 +10,8 @@ typedef union {
 } nk_reader_t;
 
 bool nk_mod_load(nk_vm_t* vm, const char* bytecode, size_t size) {
-    return false;
+    uint16_t stack;
+    nk_reader_t pos = { .u8 = (uint8_t*) bytecode };
+
+    return true;
 }

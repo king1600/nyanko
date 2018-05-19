@@ -14,6 +14,7 @@ typedef struct {
     uint64_t* pos;
     nk_string_t name;
     nk_mod_t* module;
+    uint16_t mx_stack;
 } nk_func_t;
 
 bool nk_mod_load(nk_vm_t* vm, const char* bytecode, size_t size);
