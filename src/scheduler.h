@@ -4,13 +4,9 @@
 #include "actor.h"
 
 #ifdef NK_WINDOWS
-    #include <windows.h>
-    #define NK_ABA_SIZE __int128_t
-    #define nk_sched_yield SwitchToThread
+typedef __int128_t nk_aba_t;
 #else
-    #include <sched.h>
-    #define NK_ABA_SIZE int64_t
-    #define nk_sched_yield sched_yield
+typedef int64_t nk_aba_t;
 #endif
 
 typedef struct nk_mpmc_qnode_t {
@@ -20,12 +16,12 @@ typedef struct nk_mpmc_qnode_t {
 
 typedef union {
     struct { nk_mpmc_qnode_t* node; uintptr_t count; };
-    NK_ABA_SIZE raw;
+    nk_aba_t raw;
 } nk_mpmc_qnode_aba_t;
 
 typedef struct {
     NK_ALIGN(64) NK_ATOMIC(nk_mpmc_qnode_t*) head;
-    NK_ALIGN(sizeof(NK_ABA_SIZE) << 3) nk_mpmc_qnode_aba_t tail;
+    NK_ALIGN(sizeof(nk_aba_t) << 3) nk_mpmc_qnode_aba_t tail;
 } nk_mpmc_queue_t;
 
 void nk_mpmc_queue_init(nk_mpmc_queue_t* queue);
@@ -38,12 +34,11 @@ void nk_mpmc_queue_push(nk_mpmc_queue_t* queue, void* data);
 
 //////////////////////////////////////////////////////////////////////
 
+typedef struct nk_sched_t nk_sched_t;
 typedef struct {
     size_t size;
-    void* workers;
+    nk_sched_t* workers;
 } nk_schedlist_t;
-
-typedef struct nk_vm_t nk_vm_t;
 
 void nk_sched_init(nk_vm_t* vm, nk_schedlist_t* list, size_t amount);
 

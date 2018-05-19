@@ -1,4 +1,4 @@
-#include "alloc.h"
+#include "thread.h"
 #include "scheduler.h"
 
 NK_THREAD_LOCAL nk_actor_t* __nk_actor = NULL;
@@ -14,7 +14,7 @@ void nk_actor_free(nk_actor_t* actor) {
         nk_gc_free(actor);
         NK_FREE(actor);
         for (nk_value _ = nk_actor_recv(actor); !nk_is_null(_); _ = nk_actor_recv(actor))
-            nk_sched_yield();
+            nk_thread_yield();
     }
 }
 
@@ -32,12 +32,18 @@ static inline nk_msgq_node_t* nk_msgq_node(nk_value value) {
 
 nk_actor_t* nk_actor_spawn() {
     nk_actor_t* actor = (nk_actor_t*) NK_MALLOC(sizeof(nk_actor_t));
+    nk_frame_t* frame = &actor->frame;
 
     actor->refc = 1;
     actor->active = 0;
     actor->mailbox.head = actor->mailbox.tail = nk_msgq_node(NK_NULL);
 
     nk_gc_init(actor);
+    
+    frame->ip = NULL;
+    frame->bp = NULL;
+    frame->trap = frame->traps_end = NULL;
+    frame->stack = frame->stack_end = NULL;
     
     return actor;
 }

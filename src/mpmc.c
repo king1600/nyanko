@@ -1,4 +1,4 @@
-#include "alloc.h"
+#include "thread.h"
 #include "scheduler.h"
 
 static inline nk_mpmc_qnode_t* nk_mpmc_node_alloc(void* data) {
@@ -57,7 +57,7 @@ void* nk_mpmc_queue_pop(nk_mpmc_queue_t* queue) {
 
     nk_atomic_store(&next->data , NULL, NK_ATOMIC_RELAXED);
     while (nk_atomic_load(&tail->data, NK_ATOMIC_RELAXED) != NULL)
-        nk_sched_yield();
+        nk_thread_yield();
 
     nk_atomic_fence(NK_ATOMIC_ACQUIRE);
     NK_FREE((void*) tail);

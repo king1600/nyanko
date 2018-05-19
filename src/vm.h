@@ -1,9 +1,13 @@
 #ifndef _NK_VM_H
 #define _NK_VM_H
 
+#include "thread.h"
+#include "loader.h"
 #include "scheduler.h"
 
 struct nk_vm_t {
+    nk_imap_t mod_map;
+    nk_mutex_t modmap_lock;
     nk_mpmc_queue_t actors;
     nk_schedlist_t schedulers;
     nk_mpmc_queue_t idle_schedulers;

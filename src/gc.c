@@ -172,12 +172,7 @@ static inline bool nk_gc_mark_roots(nk_actor_t* actor, nk_gc_t* gc) {
     if (NK_UNLIKELY(!frame->stack))
         return false;
 
-    size_t size = NK_NUM_REGISTERS;
-    while (size--)
-        if (nk_gc_mark(gc, frame->registers[size]) && !marked)
-            marked = true;
-
-    size = frame->stack_size;
+    size_t size = frame->stack_end - frame->stack;
     while (size--)
         if (nk_gc_mark(gc, frame->stack[size]) && !marked)
             marked = true;

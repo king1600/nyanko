@@ -1,7 +1,7 @@
 #ifndef _NK_ATOMIC_H
 #define _NK_ATOMIC_H
 
-#include <stdint.h>
+#include "nk.h"
 #include <stdatomic.h>
 
 #define NK_ATOMIC(T) T volatile
