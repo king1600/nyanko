@@ -38,16 +38,20 @@ typedef struct { uint32_t index; nk_value key; nk_value val; void* ptr; } nk_map
 #define NK_FALSE NK_VALUE(NK_TYPE_INT, 0)
 
 // internal conversions
+#define NK_SHIFT 48
+#define NK_NAN 0xfff8ULL
 #define NK_INT(v) (*((int32_t*) &(v)))
 #define NK_FROM(v) (*((nk_value*) &(v)))
 #define NK_UPTR(v) (*((uintptr_t*) &(v)))
 #define NK_TO_64(v) (*((uint64_t*) &(v)))
+#define NK_MIN(x, y) (((x) < (y)) ? (x) : (y))
+#define NK_MAX(x, y) (((x) > (y)) ? (x) : (y))
 #define NK_TYPE(v) ((((uint8_t*) &(v))[6]) & 0b111)
 #define NK_PTR(type, v) ((type)(NK_UPTR(v) & 0xffffffffffffULL))
 #define NK_SLOT_PTR(v) (NK_PTR(uint8_t*, v) - sizeof(nk_slot_t))
 #define NK_REAL_PTR(v) (NK_PTR(uint8_t*, v) - sizeof(nk_slot_t) - sizeof(uint8_t))
 static inline nk_value NK_VALUE(int type, uintptr_t data) {
-    uint64_t value = ((0xfff8ULL | type) << 48) | data;
+    uint64_t value = ((NK_NAN | type) << NK_SHIFT) | data;
     return NK_FROM(value);
 }
 
@@ -60,7 +64,7 @@ static inline nk_value NK_VALUE(int type, uintptr_t data) {
 #define nk_is_tuple(v) (NK_TYPE(v) == NK_TYPE_TUPLE)
 #define nk_is_array(v) (NK_TYPE(v) == NK_TYPE_ARRAY)
 #define nk_is_string(v) (NK_TYPE(v) == NK_TYPE_STRING)
-#define nk_is_float(v) (NK_UPTR(v) < (0xfff8ULL << 48))
+#define nk_is_float(v) (NK_UPTR(v) < (NK_NAN << NK_SHIFT))
 #define nk_is_ptr(v) (!(nk_is_float(v) || nk_is_int(v)))
 #define nk_is_shared(v) (nk_is_ptr(v) && *NK_REAL_PTR(v))
 #define nk_is_null(v) (NK_TYPE(v) == NK_TYPE_DATA && !NK_INT(v))

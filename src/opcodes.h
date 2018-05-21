@@ -1,6 +1,11 @@
 #ifndef _NK_OPCODE
 #define _NK_OPCODE
 
+#define NK_CONST_FLOAT   0
+#define NK_CONST_MOD_REF 1
+#define NK_CONST_INT     2
+#define NK_CONST_STRING  3
+
 #define NK_OP_NOP    0
 #define NK_OP_NNK_OP_LABEL nk_op_NOP
 

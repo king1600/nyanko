@@ -2,7 +2,7 @@
 #define _NK_VM_H
 
 #include "thread.h"
-#include "loader.h"
+#include "buffer.h"
 #include "scheduler.h"
 
 struct nk_vm_t {

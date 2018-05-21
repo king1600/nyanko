@@ -1,5 +1,6 @@
-#include "thread.h"
+#include "vm.h"
 #include "scheduler.h"
+#include <string.h>
 
 NK_THREAD_LOCAL nk_actor_t* __nk_actor = NULL;
 
@@ -7,15 +8,6 @@ nk_actor_t* nk_actor_this(nk_actor_t* set) {
     if (set != NULL)
         __nk_actor = set;
     return __nk_actor;
-}
-
-void nk_actor_free(nk_actor_t* actor) {
-    if (nk_atomic_sub(&actor->refc, 1, NK_ATOMIC_RELEASE) == 1) {
-        nk_gc_free(actor);
-        NK_FREE(actor);
-        for (nk_value _ = nk_actor_recv(actor); !nk_is_null(_); _ = nk_actor_recv(actor))
-            nk_thread_yield();
-    }
 }
 
 struct nk_msgq_node_t {
@@ -30,7 +22,16 @@ static inline nk_msgq_node_t* nk_msgq_node(nk_value value) {
     return node;
 }
 
-nk_actor_t* nk_actor_spawn() {
+void nk_actor_free(nk_actor_t* actor) {
+    if (nk_atomic_sub(&actor->refc, 1, NK_ATOMIC_RELEASE) == 1) {
+        nk_gc_free(actor);
+        NK_FREE(actor);
+        for (nk_value _ = nk_actor_recv(actor); !nk_is_null(_); _ = nk_actor_recv(actor))
+            nk_thread_yield();
+    }
+}
+
+nk_actor_t* nk_actor_spawn(nk_func_t* func, uint8_t argc, nk_value* argv) {
     nk_actor_t* actor = (nk_actor_t*) NK_MALLOC(sizeof(nk_actor_t));
     nk_frame_t* frame = &actor->frame;
 
@@ -40,11 +41,17 @@ nk_actor_t* nk_actor_spawn() {
 
     nk_gc_init(actor);
     
-    frame->ip = NULL;
-    frame->bp = NULL;
-    frame->trap = frame->traps_end = NULL;
-    frame->stack = frame->stack_end = NULL;
-    
+    frame->ip.u8 = func->code;
+    frame->tp = frame->rp = NULL;
+    uint8_t max_args = NK_MAX(func->mx_args, argc);
+    frame->stack_size = max_args + func->num_locals + func->mx_stack;
+    frame->stack = (nk_value*) NK_MALLOC(sizeof(nk_value) * frame->stack_size);
+    frame->sp = &(frame->bp = &frame->stack[max_args])[func->num_locals];
+
+    memcpy((void*) frame->stack, (const void*) argv, func->mx_args);
+    for (uint8_t empty = max_args - func->mx_args; empty != 0;)
+        frame->stack[empty--] = NK_NULL;
+
     return actor;
 }
 

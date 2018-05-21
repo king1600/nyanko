@@ -6,19 +6,15 @@
 #define NK_REDUCTIONS 2000
 #endif
 
-#define Next(ip) goto *((const void**) ((ip)++))
 #define NK_LABEL(name) NK_OP_ ## name ## _LABEL
-#define NK_OP(name, body) NK_LABEL(name): body; Next(frame->ip)
+#define NK_DISPATCH(ip) goto *nk_opcode_labels[*((ip).u8++)]
+#define NK_OP(name, body) NK_LABEL(name): body; NK_DISPATCH(frame->ip)
 
-uintptr_t nk_actor_interp(nk_actor_t* actor, uint8_t bytecode) {
-    static void* nk_opcode_labels[] = { NK_OPCODE_LABELS };
-    if (actor == NULL)
-        return (uintptr_t) nk_opcode_labels[bytecode];
-
-    int reductions = NK_REDUCTIONS;
+bool nk_actor_interp(nk_actor_t* actor) {
     nk_frame_t* frame = &actor->frame;
+    static void* nk_opcode_labels[] = { NK_OPCODE_LABELS };
 
-    NK_OP(NOP, Next(frame->ip));
+    NK_OP(NOP, );
 
     NK_OP(BIF, );
     NK_OP(LDC, );
@@ -88,7 +84,7 @@ uintptr_t nk_actor_interp(nk_actor_t* actor, uint8_t bytecode) {
 
     NK_OP(EXIT,
         nk_actor_free(actor);
-        return 0;
+        return false;
     );
 
     NK_UNREACHABLE();
