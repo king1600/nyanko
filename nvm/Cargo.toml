@@ -1,7 +1,6 @@
 [package]
-name = "nyanko"
+name = "nvm"
 version = "0.1.0"
 authors = ["king1600"]
 
 [dependencies]
-nvm = { path = "./nvm" }
