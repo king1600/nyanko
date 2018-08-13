@@ -4,3 +4,4 @@ version = "0.1.0"
 authors = ["king1600"]
 
 [dependencies]
+ramp = "0.5.0"

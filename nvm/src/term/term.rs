@@ -1,4 +1,5 @@
 use term::typing::*;
+use self::TermType::*;
 
 const NAN_SHIFT: u64 = 4;
 const NAN_HEADER: u64 = 0xFFF8;
@@ -10,7 +11,7 @@ pub union Term {
     uint: u64,
     ptr: usize,
     double: f64,
-    words: [u8; 8],
+    words: [u16; 4],
 }
 
 impl From<Term> for i32 {
@@ -33,34 +34,35 @@ impl From<f64> for Term {
 
 impl From<i32> for Term {
     fn from(item: i32) -> Self {
-        Self::from_type(TermType::TInt, unsafe { Term { int: item }.uint })
+        Self::from_type(TInt, unsafe { Term { int: item }.uint })
     }
 }
 
 impl Term {
-    #[inline]
-    pub fn from_raw<T>(term_type: TermType, ptr: *mut T) -> Term {
+    pub fn from_ptr<T>(term_type: TermType, ptr: *mut T) -> Term {
         Self::from_type(term_type, unsafe { Term { ptr: ptr as usize }.uint })
     }
 
-    #[inline]
     fn from_type(term_type: TermType, payload: u64) -> Term {
         Term { uint: NAN_MAX_VALUE | (term_type.value() << NAN_SHIFT) | payload }
     }
 
     #[inline]
     pub fn as_ptr<T>(&self) -> *mut T {
-        unsafe { (self.ptr & (1 << NAN_SHIFT)) as *mut T }
+        unsafe { (self.ptr & !(1 << NAN_SHIFT)) as *mut T }
     } 
 
-    #[inline]
     pub fn get_type(&self) -> TermType {
-        unsafe { ((self.words[6] & 0b111) as u64).into() }
+        if self.is_float() {
+            TFloat
+        } else {
+            unsafe { ((self.words[3] & 0b111) as u64).into() }
+        }
     }
 
-    #[inline(always)]
-    pub fn is_ptr(&self) -> bool {
-        !self.is_number()
+    #[inline]
+    pub fn is_number(&self) -> bool {
+        unsafe { self.words[3] <= (NAN_MAX_VALUE + TInt.value()) as u16 }
     }
 
     #[inline]
@@ -68,9 +70,43 @@ impl Term {
         unsafe { self.uint < NAN_MAX_VALUE }
     }
 
-    #[inline]
-    pub fn is_number(&self) -> bool {
-        unsafe { self.uint <= NAN_MAX_VALUE }
+    #[inline(always)]
+    pub fn is_ptr(&self) -> bool {
+        !self.is_number()
     }
+
+    fn is(&self, term_type: TermType) -> bool {
+        unsafe { self.words[3] == (NAN_MAX_VALUE + term_type.value()) as u16 }
+    }
+}
+
+macro_rules! getter {
+    ($name:ident, $type:path) => (
+        #[inline(always)]
+        pub fn $name(&self) -> bool {
+            self.is($type)
+        }
+    );
+    ($name:ident, $type:path, $result:ty, $fetch:tt) => (
+        #[inline]
+        pub fn $name(&self) -> Result<$result, String> {
+            if !self.is($type) {
+                return Err(format!("Expected {} got {}", $type, self.get_type()))
+            }
+            unsafe { Ok(self.$fetch) }
+        }
+    );
+}
+
+impl Term {
+    getter!(is_int, TInt);
+    getter!(is_data, TData);
+    getter!(is_atom, TAtom);
+    getter!(is_func, TFunc);
+    getter!(is_list, TList);
+    getter!(is_string, TString);
+    getter!(is_object, TObject);
+
+    getter!(get_int, TInt, i32, int);
 }
 
