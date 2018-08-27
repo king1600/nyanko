@@ -18,8 +18,8 @@ unsafe fn get(_this: &Binary, _index: i32) -> i32 {
     0
 }
 
-unsafe fn set(_this: &mut Binary, _index: i32, _value: i32) {
-    
+unsafe fn set(_this: &mut Binary, _index: i32, _value: i32) -> bool {
+    true
 }
 
 unsafe fn hash(_this: &Binary) -> Hash {

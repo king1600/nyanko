@@ -23,7 +23,7 @@ pub struct BinTable {
     len: unsafe fn(&Binary) -> i32,
     hash: unsafe fn(&Binary) -> Hash,
     get: unsafe fn(&Binary, i32) -> i32,
-    set: unsafe fn(&mut Binary, i32, i32),
+    set: unsafe fn(&mut Binary, i32, i32) -> bool,
     append: unsafe fn(&Binary, &Binary) -> *mut Binary,
     substr: unsafe fn(&Binary, i32, i32) -> *mut Binary,
 }
@@ -54,14 +54,19 @@ impl Binary {
     }
 
     pub fn get(&self, index: Term) -> Result<Term, &'static str> {
-        let index = self.unwrap_int(index)?;
-        Ok(unsafe { ((*self.vtable).get)(self, self.in_range(index)?).into() })
+        let index = self.in_range(self.unwrap_int(index)?)?;
+        Ok(unsafe { ((*self.vtable).get)(self, index).into() })
     }
 
     pub fn set(&mut self, index: Term, value: Term) -> Result<(), &'static str> {
         let value = self.unwrap_int(value)?;
         let index = self.in_range(self.unwrap_int(index)?)?;
-        Ok(unsafe { ((*self.vtable).set)(self, index, value) })
+
+        if unsafe { ((*self.vtable).set)(self, index, value) } {
+            Ok(())
+        } else {
+            Err("Out of memory!")
+        }
     }
 
     pub fn append(&self, _other: Term) -> Result<Term, &'static str> {
