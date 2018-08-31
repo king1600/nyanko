@@ -1,2 +1,2 @@
 # Nyanko VM
-An actor based, concurrent, language virtual machine
+Elixir's and Beam's incomplete cousin
