@@ -30,9 +30,11 @@ impl<'a> Iterator for Lexer<'a> {
     type Item = Token<'a>;
 
     fn next(&mut self) -> Option<Token<'a>> {
-        if !self.skip_whitespace() { return None }
-        let pos = (self.column, self.line, self.start);
+        if !self.skip_whitespace() {
+            return None
+        }
 
+        let pos = (self.column, self.line, self.start);
         match (self.next_byte(), self.peek_byte()) {
             (Some(b'.'), Some(byte)) if byte.is_ascii_digit() => self.scan_number(pos),
             (Some(byte), _) if byte.is_ascii_digit() => self.scan_number(pos),
@@ -84,13 +86,22 @@ impl<'a> Lexer<'a> {
         }
     }
 
+    fn is_identifier(byte: u8) -> bool {
+        byte.is_ascii_alphanumeric() || byte == b'_' || byte == b'$'
+    }
+
     #[inline]
     fn peek_byte(&self) -> Option<u8> {
         self.source.get(self.pos).and_then(|byte| Some(*byte))
     }
 
-    fn is_identifier(byte: u8) -> bool {
-        byte.is_ascii_alphanumeric() || byte == b'_' || byte == b'$'
+    #[inline]
+    fn next_if(&mut self, compare: u8) -> Option<u8> {
+        if self.peek_byte().unwrap_or(0).to_ascii_lowercase() == compare {
+            self.next_byte()
+        } else {
+            None
+        }
     }
 
     fn next_byte(&mut self) -> Option<u8> {
@@ -108,7 +119,9 @@ impl<'a> Lexer<'a> {
     fn read_while<P>(&mut self, predicate: P) -> usize where P: Fn(u8) -> bool {
         let mut consumed = 0;
         while let Some(&byte) = self.source.get(self.pos) {
-            if !predicate(byte) { break }
+            if !predicate(byte) {
+                break
+            }
             self.next_byte();
             consumed += 1
         }
@@ -139,7 +152,9 @@ impl<'a> Lexer<'a> {
                 (b'*', Some(b')')) => depth -= 1,
                 _ => {},
             }
-            if depth == 0 { break }
+            if depth == 0 {
+                break
+            }
         }
         self.next()
     }
@@ -156,7 +171,9 @@ impl<'a> Lexer<'a> {
         while self.peek_byte().is_some() {
             self.read_while(|byte| byte != b'"');
             self.next_byte();
-            if self.source.get(self.pos - 2).unwrap_or(&0) != &b'\\' { break } 
+            if self.source.get(self.pos - 2).unwrap_or(&0) != &b'\\' {
+                break
+            } 
         }
 
         if let Some(b'"') = self.source.get(self.pos - 1) {
@@ -164,5 +181,28 @@ impl<'a> Lexer<'a> {
         } else {
             None
         }
+    }
+
+    fn scan_number(&mut self, source_loc: SourceLoc) -> Option<Token<'a>> {
+        use std::str::from_utf8;
+        let start = self.pos - 1;
+
+        self.read_while(|byte| 
+            byte.is_ascii_digit() ||
+            "eE+-.".as_bytes().contains(&byte));
+
+        from_utf8(&self.source[start..self.pos]).ok().and_then(|text| {
+            if text.contains("e") || text.contains("E") || text.contains(".") {
+                text.parse::<f64>().ok().and_then(|number| {
+                    Some((if text.contains(".") {
+                        Float(number)
+                    } else {
+                        Int(number as i64)
+                    }, source_loc))
+                })
+            } else {
+                text.parse::<i64>().ok().and_then(|number| Some((Int(number), source_loc)))
+            }
+        })
     }
 }
