@@ -2,6 +2,21 @@ use super::ast::*;
 use self::Keyword::*;
 use self::Operator::*;
 use self::TokenType::*;
+use std::collections::HashMap;
+
+lazy_static! {
+    static ref KEYWORDS: HashMap<&'static [u8], TokenType<'static>> = {
+        let mut keywords = HashMap::new();
+        keywords.insert("mod".as_bytes(), Kw(Module));
+        keywords.insert("fn".as_bytes(),    Kw(Fun));
+        keywords.insert("case".as_bytes(),   Kw(Case));
+        keywords.insert("end".as_bytes(),    Kw(End));
+        keywords.insert("if".as_bytes(),     Kw(If));
+        keywords.insert("elif".as_bytes(),   Kw(Elif));
+        keywords.insert("else".as_bytes(),   Kw(Else));
+        keywords
+    };
+}
 
 pub struct Lexer<'a> {
     pos: usize,
@@ -15,12 +30,12 @@ impl<'a> Iterator for Lexer<'a> {
     type Item = Token<'a>;
 
     fn next(&mut self) -> Option<Token<'a>> {
-        if self.skip_whitespace() { return None }
+        if !self.skip_whitespace() { return None }
         let pos = (self.column, self.line, self.start);
 
         match (self.next_byte(), self.peek_byte()) {
-            (Some(b'.'), Some(byte)) if byte.is_ascii_digit() => self.scan_float(0, byte, pos),
-            (Some(byte), _) if byte.is_ascii_digit() => self.scan_integer(pos),
+            (Some(b'.'), Some(byte)) if byte.is_ascii_digit() => self.scan_number(pos),
+            (Some(byte), _) if byte.is_ascii_digit() => self.scan_number(pos),
             (Some(byte), _) if Self::is_identifier(byte) => self.scan_id(pos),
             (Some(b'>'), Some(b'>')) => self.consume(Op(Shr), pos),
             (Some(b'<'), Some(b'<')) => self.consume(Op(Shl), pos),
@@ -101,8 +116,7 @@ impl<'a> Lexer<'a> {
     }
 
     fn skip_whitespace(&mut self) -> bool {
-        self.read_while(|byte| byte.is_ascii_whitespace()) > 1
-        && self.pos < self.source.len()
+        self.read_while(|byte| byte.is_ascii_whitespace()) > 0 || self.pos < self.source.len()
     }
 
     #[inline]
@@ -132,34 +146,9 @@ impl<'a> Lexer<'a> {
 
     fn scan_id(&mut self, source_loc: SourceLoc) -> Option<Token<'a>> {
         let start = self.pos - 1;
-        if self.read_while(|byte| Self::is_identifier(byte)) > 0 {
-            Some((Id(&self.source[start..self.pos]), source_loc))
-        } else {
-            None
-        }
-    }
-
-    fn scan_integer(&mut self, source_loc: SourceLoc) -> Option<Token<'a>> {
-        self.pos -= 1;
-        self.scan_number().and_then(|(number, _)| {
-            self.pos += 1;
-            match self.peek_byte().unwrap_or(0).to_ascii_lowercase(){
-                b'.' => self.scan_float(number, self.next_byte().unwrap_or(0), source_loc),
-                b'e' => Some((Int(number * self.scan_exponent()), source_loc)),
-                _ => Some((Int(number), source_loc))
-            }
-        })
-    }
-
-    fn scan_float(&mut self, start: i64, _point: u8, source_loc: SourceLoc) -> Option<Token<'a>> {
-        self.scan_number().and_then(|(number, length)| {
-            let number = (number as f64).powi(length as i32);
-            if self.peek_byte().unwrap_or(0).to_ascii_lowercase() == b'e' {
-                Some((Float(number * self.scan_exponent() as f64), source_loc))
-            } else {
-                Some((Float(number), source_loc))
-            }
-        })
+        self.read_while(|byte| Self::is_identifier(byte));
+        let name = &self.source[start..self.pos];
+        Some((KEYWORDS.get(name).unwrap_or(&Id(name)).clone(), source_loc))
     }
 
     fn scan_string(&mut self, source_loc: SourceLoc) -> Option<Token<'a>> {
@@ -171,35 +160,9 @@ impl<'a> Lexer<'a> {
         }
 
         if let Some(b'"') = self.source.get(self.pos - 1) {
-            Some((Str(&self.source[start..self.pos - 2]), source_loc))
+            Some((Str(&self.source[start..self.pos - 1]), source_loc))
         } else {
             None
         }
-    }
-
-    fn scan_number(&mut self) -> Option<(i64, usize)> {
-        use std::str::from_utf8;
-        let length = self.read_while(|byte| byte.is_ascii_digit());
-
-        (if length == 0 { None } else { Some(length) })
-            .and_then(|length| from_utf8(&self.source[self.pos..length]).ok())
-            .and_then(|string| string.parse::<i64>().ok())
-            .and_then(|number| {
-                self.pos += length;
-                self.column += length;
-                Some((number, length))
-            })
-    }
-
-    fn scan_exponent(&mut self) -> i64 {
-        self.next_byte();
-        let modifier = match self.peek_byte() {
-            Some(b'-') => { self.next_byte(); -1 },
-            Some(b'+') => { self.next_byte(); 1 },
-            _ => 1,
-        };
-        self.scan_number()
-            .and_then(|(number, _)| Some(10i64.pow(number as u32) * modifier))
-            .unwrap_or(0)
     }
 }

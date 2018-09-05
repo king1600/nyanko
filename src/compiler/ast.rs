@@ -4,18 +4,21 @@ pub type SourceLoc = (usize, usize, usize);
 pub type Expr<'a> = (ExprType<'a>, SourceLoc);
 pub type Token<'a> = (TokenType<'a>, SourceLoc);
 
+#[derive(Debug, Clone)]
 pub enum Keyword {
     Case, End,
     Fun, Module,
     If, Elif, Else,
 }
 
+#[derive(Debug, Clone)]
 pub enum Operator {
     Add, Sub, Div, Mul, Mod, Set,
     Shr, Shl, Xor, Bor, Bnot, Band,
     Equ, Neq, Lt, Lte, Gt, Gte, Or, And,
 }
 
+#[derive(Debug)]
 pub enum Pattern<'a> {
     PId(&'a [u8]),
     PTuple(List<Pattern<'a>>),
@@ -23,6 +26,7 @@ pub enum Pattern<'a> {
     PCons(Box<(Pattern<'a>, Pattern<'a>)>),
 }
 
+#[derive(Debug, Clone)]
 pub enum TokenType<'a> {
     Int(i64),
     Float(f64),
@@ -34,6 +38,7 @@ pub enum TokenType<'a> {
     LParen, RParen, LBrace, RBrace, LCurly, RCurly,
 }
 
+#[derive(Debug)]
 pub enum ExprType<'a> {
     EInt(i64),
     EFloat(f64),
