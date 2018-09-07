@@ -7,7 +7,8 @@
 use compiler::lexer::Lexer;
 
 fn main() {
-    for (token, _pos) in Lexer::new("x = 5") {
-        println!("Found: {:?}", token)
+    let mut lexer = Lexer::new("x = 5");
+    while let Ok(Some((token, _pos))) = lexer.next() {
+        println!("Found {:?}", token);
     }
 }

@@ -3,6 +3,7 @@ use std::collections::LinkedList as List;
 pub type Expr = (ExprType, SourceLoc);
 pub type Token = (TokenType, SourceLoc);
 pub type SourceLoc = (usize, usize, usize);
+pub type ParserError = (&'static str, SourceLoc);
 
 #[derive(Debug, Clone)]
 pub enum Keyword {
