@@ -1,5 +1,6 @@
-use std::collections::LinkedList as List;
+use std::collections::LinkedList as InnerList;
 
+pub type List<T> = InnerList<T>;
 pub type Expr = (ExprType, SourceLoc);
 pub type Token = (TokenType, SourceLoc);
 pub type SourceLoc = (usize, usize, usize);
