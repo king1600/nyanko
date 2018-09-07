@@ -1,208 +1,178 @@
 use super::ast::*;
+use std::str::Chars;
 use self::Keyword::*;
 use self::Operator::*;
 use self::TokenType::*;
+use std::iter::Peekable;
 use std::collections::HashMap;
 
 lazy_static! {
-    static ref KEYWORDS: HashMap<&'static [u8], TokenType<'static>> = {
+    static ref KEYWORDS: HashMap<&'static str, TokenType> = {
         let mut keywords = HashMap::new();
-        keywords.insert("mod".as_bytes(), Kw(Module));
-        keywords.insert("fn".as_bytes(),    Kw(Fun));
-        keywords.insert("case".as_bytes(),   Kw(Case));
-        keywords.insert("end".as_bytes(),    Kw(End));
-        keywords.insert("if".as_bytes(),     Kw(If));
-        keywords.insert("elif".as_bytes(),   Kw(Elif));
-        keywords.insert("else".as_bytes(),   Kw(Else));
+        keywords.insert("case", Kw(Case));
+        keywords.insert("end",  Kw(End));
+        keywords.insert("fn",   Kw(Fun));
+        keywords.insert("mod",  Kw(Module));
+        keywords.insert("if",   Kw(If));
+        keywords.insert("elif", Kw(Elif));
+        keywords.insert("else", Kw(Else));
         keywords
     };
 }
 
 pub struct Lexer<'a> {
-    pos: usize,
     line: usize,
     start: usize,
     column: usize,
-    source: &'a [u8]
+    chars: Peekable<Chars<'a>>,
 }
 
 impl<'a> Iterator for Lexer<'a> {
-    type Item = Token<'a>;
+    type Item = Token;
 
-    fn next(&mut self) -> Option<Token<'a>> {
+    fn next(&mut self) -> Option<Token> {
         if !self.skip_whitespace() {
             return None
         }
 
         let pos = (self.column, self.line, self.start);
-        match (self.next_byte(), self.peek_byte()) {
-            (Some(b'.'), Some(byte)) if byte.is_ascii_digit() => self.scan_number(pos),
-            (Some(byte), _) if byte.is_ascii_digit() => self.scan_number(pos),
-            (Some(byte), _) if Self::is_identifier(byte) => self.scan_id(pos),
-            (Some(b'>'), Some(b'>')) => self.consume(Op(Shr), pos),
-            (Some(b'<'), Some(b'<')) => self.consume(Op(Shl), pos),
-            (Some(b'='), Some(b'=')) => self.consume(Op(Equ), pos),
-            (Some(b'!'), Some(b'=')) => self.consume(Op(Neq), pos),
-            (Some(b'>'), Some(b'=')) => self.consume(Op(Gte), pos),
-            (Some(b'<'), Some(b'=')) => self.consume(Op(Lte), pos),
-            (Some(b'&'), Some(b'&')) => self.consume(Op(And), pos),
-            (Some(b'|'), Some(b'|')) => self.consume(Op(Or), pos),
-            (Some(b'('), Some(b'*')) => self.block_comment(),
-            (Some(b'-'), Some(b'>')) => Some((Arrow, pos)),
-            (Some(b'&'), _) => Some((Op(Band), pos)),
-            (Some(b'~'), _) => Some((Op(Bnot), pos)),
-            (Some(b'='), _) => Some((Op(Set), pos)),
-            (Some(b'+'), _) => Some((Op(Add), pos)),
-            (Some(b'-'), _) => Some((Op(Sub), pos)),
-            (Some(b'|'), _) => Some((Op(Bor), pos)),
-            (Some(b'^'), _) => Some((Op(Xor), pos)),
-            (Some(b'*'), _) => Some((Op(Mul), pos)),
-            (Some(b'/'), _) => Some((Op(Div), pos)),
-            (Some(b'%'), _) => Some((Op(Mod), pos)),
-            (Some(b'('), _) => Some((LParen, pos)),
-            (Some(b')'), _) => Some((RParen, pos)),
-            (Some(b'['), _) => Some((LBrace, pos)),
-            (Some(b']'), _) => Some((RBrace, pos)),
-            (Some(b'{'), _) => Some((LCurly, pos)),
-            (Some(b'}'), _) => Some((RCurly, pos)),
-            (Some(b','), _) => Some((Comma, pos)),
-            (Some(b':'), _) => Some((Colon, pos)),
-            (Some(b'.'), _) => Some((Dot, pos)),
-            (Some(b'#'), _) => self.line_comment(),
-            (Some(b'"'), _) => self.scan_string(pos),
+        match (self.next_char(), self.peek_char()) {
+            (Some('.'), Some(c)) if c.is_digit(10) => self.scan_number(pos, c),
+            (Some(c), _) if c.is_digit(10) => self.scan_number(pos, c),
+            (Some(c), _) if Self::is_identifier(c) => self.scan_id(pos, c),
+            (Some('>'), Some('>')) => self.consume(Op(Shr), pos),
+            (Some('<'), Some('<')) => self.consume(Op(Shl), pos),
+            (Some('='), Some('=')) => self.consume(Op(Equ), pos),
+            (Some('!'), Some('=')) => self.consume(Op(Neq), pos),
+            (Some('>'), Some('=')) => self.consume(Op(Gte), pos),
+            (Some('<'), Some('=')) => self.consume(Op(Lte), pos),
+            (Some('&'), Some('&')) => self.consume(Op(And), pos),
+            (Some('|'), Some('|')) => self.consume(Op(Or), pos),
+            (Some('='), Some('>')) => self.consume(Arrow, pos),
+            (Some('('), Some('*')) => self.block_comment(),
+            (Some('#'), _) => self.line_comment(),
+            (Some('"'), _) => self.scan_str(pos),
+            (Some('~'), _) => Some((Op(Bnot), pos)),
+            (Some('&'), _) => Some((Op(Band), pos)),
+            (Some('^'), _) => Some((Op(Xor), pos)),
+            (Some('|'), _) => Some((Op(Bor), pos)),
+            (Some('!'), _) => Some((Op(Not), pos)),
+            (Some('+'), _) => Some((Op(Add), pos)),
+            (Some('-'), _) => Some((Op(Sub), pos)),
+            (Some('*'), _) => Some((Op(Mul), pos)),
+            (Some('/'), _) => Some((Op(Div), pos)),
+            (Some('%'), _) => Some((Op(Mod), pos)),
+            (Some('='), _) => Some((Op(Set), pos)),
+            (Some('('), _) => Some((LParen, pos)),
+            (Some(')'), _) => Some((RParen, pos)),
+            (Some('['), _) => Some((LBrace, pos)),
+            (Some(']'), _) => Some((RBrace, pos)),
+            (Some('{'), _) => Some((LCurly, pos)),
+            (Some('}'), _) => Some((RCurly, pos)),
+            (Some(','), _) => Some((Comma, pos)),
+            (Some(':'), _) => Some((Colon, pos)),
+            (Some('.'), _) => Some((Dot, pos)),
             _ => None,
         }
     }
 }
 
 impl<'a> Lexer<'a> {
-    pub fn new(source: &'a [u8]) -> Lexer<'a> {
+    pub fn new(source: &'a str) -> Lexer<'a> {
         Lexer {
-            pos: 0,
             line: 1,
             start: 0,
             column: 0,
-            source: source,
+            chars: source.chars().peekable(),
         }
     }
 
-    fn is_identifier(byte: u8) -> bool {
-        byte.is_ascii_alphanumeric() || byte == b'_' || byte == b'$'
-    }
-
     #[inline]
-    fn peek_byte(&self) -> Option<u8> {
-        self.source.get(self.pos).and_then(|byte| Some(*byte))
+    fn peek_char(&mut self) -> Option<char> {
+        self.chars.peek().and_then(|c| Some(*c))
     }
 
-    #[inline]
-    fn next_if(&mut self, compare: u8) -> Option<u8> {
-        if self.peek_byte().unwrap_or(0).to_ascii_lowercase() == compare {
-            self.next_byte()
-        } else {
-            None
-        }
+    fn is_identifier(c: char) -> bool {
+        c.is_digit(10) || c == '_' || c == '$'
     }
 
-    fn next_byte(&mut self) -> Option<u8> {
-        let byte = self.peek_byte();
-        self.pos += 1;
+    fn next_char(&mut self) -> Option<char> {
         self.column += 1;
-        if let Some(b'\n') = byte {
+        let next = self.peek_char();
+        if let Some('\n') = next {
             self.start += self.column;
             self.column = 0;
             self.line += 1;
         }
-        byte
+        next
     }
 
-    fn read_while<P>(&mut self, predicate: P) -> usize where P: Fn(u8) -> bool {
-        let mut consumed = 0;
-        while let Some(&byte) = self.source.get(self.pos) {
-            if !predicate(byte) {
+    fn read_while<P>(&mut self, 
+        mut output: Option<&mut String>,
+        predicate: P) where P: Fn(char) -> bool
+    {
+        while let Some(value) = self.peek_char() {
+            if !predicate(value) {
+                self.next_char();
+                if let Some(string) = &mut output {
+                    string.push(value);
+                }
+            } else {
                 break
             }
-            self.next_byte();
-            consumed += 1
         }
-        consumed
-    }
-
-    fn skip_whitespace(&mut self) -> bool {
-        self.read_while(|byte| byte.is_ascii_whitespace()) > 0 || self.pos < self.source.len()
     }
 
     #[inline]
-    fn consume(&mut self, token_type: TokenType<'a>, source_loc: SourceLoc) -> Option<Token<'a>> {
-        self.next_byte();
-        Some((token_type, source_loc))
+    fn skip_whitespace(&mut self) -> bool {
+        self.read_while(None, |c| c.is_whitespace());
+        self.peek_char().is_some()
     }
 
-    fn line_comment(&mut self) -> Option<Token<'a>> {
-        self.read_while(|byte| byte != b'\n');
-        self.next_byte();
-        self.next()
+    #[inline]
+    fn consume(&mut self, token_type: TokenType, pos: SourceLoc) -> Option<Token> {
+        self.next_char();
+        Some((token_type, pos))
     }
 
-    fn block_comment(&mut self) -> Option<Token<'a>> {
-        let mut depth = 1;
-        while let Some(byte) = self.next_byte() {
-            match (byte, self.peek_byte()) {
-                (b'(', Some(b'*')) => depth += 1,
-                (b'*', Some(b')')) => depth -= 1,
-                _ => {},
-            }
-            if depth == 0 {
+    #[inline]
+    fn line_comment(&mut self) -> Option<Token> {
+        None
+    }
+
+    #[inline]
+    fn block_comment(&mut self) -> Option<Token> {
+        None
+    }
+
+    #[inline]
+    fn scan_id(&mut self, pos: SourceLoc, start: char) -> Option<Token> {
+        None
+    }
+
+    #[inline]
+    fn scan_str(&mut self, pos: SourceLoc) -> Option<Token> {
+        let mut string = String::new();
+
+        while self.peek_char().is_some() {
+            self.read_while(Some(&mut string), |c| c != '"');
+            if string.ends_with("\\") {
+                string.push(self.next_char().unwrap_or('"'));
+            } else {
                 break
             }
         }
-        self.next()
-    }
 
-    fn scan_id(&mut self, source_loc: SourceLoc) -> Option<Token<'a>> {
-        let start = self.pos - 1;
-        self.read_while(|byte| Self::is_identifier(byte));
-        let name = &self.source[start..self.pos];
-        Some((KEYWORDS.get(name).unwrap_or(&Id(name)).clone(), source_loc))
-    }
-
-    fn scan_string(&mut self, source_loc: SourceLoc) -> Option<Token<'a>> {
-        let start = self.pos;
-        while self.peek_byte().is_some() {
-            self.read_while(|byte| byte != b'"');
-            self.next_byte();
-            if self.source.get(self.pos - 2).unwrap_or(&0) != &b'\\' {
-                break
-            } 
-        }
-
-        if let Some(b'"') = self.source.get(self.pos - 1) {
-            Some((Str(&self.source[start..self.pos - 1]), source_loc))
+        if let Some('"') = self.peek_char() {
+            self.next_char();
+            Some((Str(string), pos))
         } else {
             None
         }
     }
 
-    fn scan_number(&mut self, source_loc: SourceLoc) -> Option<Token<'a>> {
-        use std::str::from_utf8;
-        let start = self.pos - 1;
-
-        self.read_while(|byte| 
-            byte.is_ascii_digit() ||
-            "eE+-.".as_bytes().contains(&byte));
-
-        from_utf8(&self.source[start..self.pos]).ok().and_then(|text| {
-            if text.contains("e") || text.contains("E") || text.contains(".") {
-                text.parse::<f64>().ok().and_then(|number| {
-                    Some((if text.contains(".") {
-                        Float(number)
-                    } else {
-                        Int(number as i64)
-                    }, source_loc))
-                })
-            } else {
-                text.parse::<i64>().ok().and_then(|number| Some((Int(number), source_loc)))
-            }
-        })
+    #[inline]
+    fn scan_number(&mut self, pos: SourceLoc, start: char) -> Option<Token> {
+        None
     }
 }

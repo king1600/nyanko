@@ -7,7 +7,7 @@
 use compiler::lexer::Lexer;
 
 fn main() {
-    for (token, pos) in Lexer::new("5.14".as_bytes()) {
+    for (token, _pos) in Lexer::new("x = 5") {
         println!("Found: {:?}", token)
     }
 }
