@@ -27,6 +27,57 @@ pub struct Lexer<'a> {
     chars: Peekable<Chars<'a>>,
 }
 
+impl<'a> Iterator for Lexer<'a> {
+    type Item = Result<Token, ParserError>;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        if !self.skip_whitespace() {
+            return None
+        }
+
+        let pos = (self.column, self.line, self.start);
+        match (self.next_char(), self.peek_char()) {
+            (Some('.'), Some(c)) if c.is_digit(10) => self.scan_number(pos, '\0'),
+            (Some(c), _) if c.is_digit(10) => self.scan_number(pos, c),
+            (Some(c), _) if Self::is_identifier(c) => self.scan_id(pos, c),
+            (Some('>'), Some('>')) => self.consume(Op(Shr), pos),
+            (Some('<'), Some('<')) => self.consume(Op(Shl), pos),
+            (Some('='), Some('=')) => self.consume(Op(Equ), pos),
+            (Some('!'), Some('=')) => self.consume(Op(Neq), pos),
+            (Some('>'), Some('=')) => self.consume(Op(Gte), pos),
+            (Some('<'), Some('=')) => self.consume(Op(Lte), pos),
+            (Some('&'), Some('&')) => self.consume(Op(And), pos),
+            (Some('|'), Some('|')) => self.consume(Op(Or), pos),
+            (Some('='), Some('>')) => self.consume(Arrow, pos),
+            (Some('('), Some('*')) => self.block_comment(pos),
+            (Some('#'), _) => self.line_comment(),
+            (Some('"'), _) => self.scan_str(pos),
+            (Some('~'), _) => Some(Ok((Op(Bnot), pos))),
+            (Some('&'), _) => Some(Ok((Op(Band), pos))),
+            (Some('^'), _) => Some(Ok((Op(Xor), pos))),
+            (Some('|'), _) => Some(Ok((Op(Bor), pos))),
+            (Some('!'), _) => Some(Ok((Op(Not), pos))),
+            (Some('+'), _) => Some(Ok((Op(Add), pos))),
+            (Some('-'), _) => Some(Ok((Op(Sub), pos))),
+            (Some('*'), _) => Some(Ok((Op(Mul), pos))),
+            (Some('/'), _) => Some(Ok((Op(Div), pos))),
+            (Some('%'), _) => Some(Ok((Op(Mod), pos))),
+            (Some('='), _) => Some(Ok((Op(Set), pos))),
+            (Some('('), _) => Some(Ok((LParen, pos))),
+            (Some(')'), _) => Some(Ok((RParen, pos))),
+            (Some('['), _) => Some(Ok((LBrace, pos))),
+            (Some(']'), _) => Some(Ok((RBrace, pos))),
+            (Some('{'), _) => Some(Ok((LCurly, pos))),
+            (Some('}'), _) => Some(Ok((RCurly, pos))),
+            (Some(','), _) => Some(Ok((Comma, pos))),
+            (Some(':'), _) => Some(Ok((Colon, pos))),
+            (Some('.'), _) => Some(Ok((Dot, pos))),
+            (Some(c), _) => Some(Err((format!("Unexpected character {}", c), pos))),
+            _ => None,
+        }
+    }
+}
+
 impl<'a> Lexer<'a> {
     pub fn new(source: &'a str) -> Lexer<'a> {
         Lexer {
@@ -36,14 +87,14 @@ impl<'a> Lexer<'a> {
             chars: source.chars().peekable(),
         }
     }
+    
+    fn is_identifier(c: char) -> bool {
+        c.is_alphanumeric() || c == '_' || c == '$'
+    }
 
     #[inline]
     fn peek_char(&mut self) -> Option<char> {
         self.chars.peek().and_then(|c| Some(*c))
-    }
-
-    fn is_identifier(c: char) -> bool {
-        c.is_alphanumeric() || c == '_' || c == '$'
     }
 
     fn next_char(&mut self) -> Option<char> {
@@ -79,26 +130,26 @@ impl<'a> Lexer<'a> {
     }
 
     #[inline]
-    fn consume(&mut self, token_type: TokenType, pos: SourceLoc) -> Result<Option<Token>, ParserError> {
+    fn consume(&mut self, token_type: TokenType, pos: SourceLoc) -> Option<Result<Token, ParserError>> {
         self.next_char();
-        Ok(Some((token_type, pos)))
+        Some(Ok((token_type, pos)))
     }
 
     #[inline]
-    fn line_comment(&mut self) -> Result<Option<Token>, ParserError> {
+    fn line_comment(&mut self) -> Option<Result<Token, ParserError>> {
         self.read_while(None, |c| c != '\n');
         self.next()
     }
 
     #[inline]
-    fn block_comment(&mut self, pos: SourceLoc) -> Result<Option<Token>, ParserError> {
+    fn block_comment(&mut self, pos: SourceLoc) -> Option<Result<Token, ParserError>> {
         self.next_char();
         let mut depth = 1;
         loop {
             match (self.next_char(), self.next_char()) {
                 (Some('*'), Some(')')) => depth -= 1,
                 (Some('('), Some('*')) => depth += 1,
-                (None, _) | (_, None)  => return Err(("Unterminated block comment", pos)),
+                (None, _) | (_, None)  => return Some(Err(("Unterminated block comment".to_string(), pos))),
                 _ => {},
             }
             if depth == 0 {
@@ -108,15 +159,15 @@ impl<'a> Lexer<'a> {
     }
 
     #[inline]
-    fn scan_id(&mut self, pos: SourceLoc, start: char) -> Result<Option<Token>, ParserError> {
+    fn scan_id(&mut self, pos: SourceLoc, start: char) -> Option<Result<Token, ParserError>> {
         let mut id = String::new();
         id.push(start);
         self.read_while(Some(&mut id), Self::is_identifier);
-        Ok(Some((KEYWORDS.get(id.as_str()).unwrap_or(&Id(id)).clone(), pos)))
+        Some(Ok((KEYWORDS.get(id.as_str()).unwrap_or(&Id(id)).clone(), pos)))
     }
 
     #[inline]
-    fn scan_str(&mut self, pos: SourceLoc) -> Result<Option<Token>, ParserError> {
+    fn scan_str(&mut self, pos: SourceLoc) -> Option<Result<Token, ParserError>> {
         let mut string = String::new();
 
         while self.peek_char().is_some() {
@@ -128,16 +179,16 @@ impl<'a> Lexer<'a> {
             }
         }
 
-        if let Some('"') = self.peek_char() {
+        Some(if let Some('"') = self.peek_char() {
             self.next_char();
-            Ok(Some((Str(string), pos)))
+            Ok((Str(string), pos))
         } else {
-            Err(("Unterminated string literal", pos))
-        }
+            Err(("Unterminated string literal".to_string(), pos))
+        })
     }
 
     #[inline]
-    fn scan_number(&mut self, pos: SourceLoc, start: char) -> Result<Option<Token>, ParserError> {
+    fn scan_number(&mut self, pos: SourceLoc, start: char) -> Option<Result<Token, ParserError>> {
         let mut number = String::new();
         if start != '\0' {
             number.push(start);
@@ -161,63 +212,24 @@ impl<'a> Lexer<'a> {
                     number.push(self.next_char().unwrap_or('+'));
                     self.read_while(Some(&mut number), |c| c.is_digit(10));
                 },
-                _ => return Err(("Invalid number literal", pos))
+                _ => return Some(Err(("Invalid number literal".to_string(), pos)))
             }
         }
 
         let is_float = number.contains(".");
-        Ok(if is_float || number.contains("e") {
-            number.as_str().parse::<f64>().ok().and_then(|number| Some((
-                if is_float { Float(number) } else { Int(number as i64) }
-            , pos)))
+        Some(if is_float || number.contains("e") {
+            number.as_str().parse::<f64>().ok()
+                .and_then(|number|
+                    Some((if is_float {
+                        Float(number)
+                    } else {
+                        Int(number as i64)
+                    }, pos))
+                ).ok_or(("Invalid float literal".to_string(), pos))
         } else {
-            number.as_str().parse::<i64>().ok().and_then(|int| Some((Int(int), pos)))
+            number.as_str().parse::<i64>().ok()
+                .and_then(|int| Some((Int(int), pos)))
+                .ok_or(("Invalid integer literal".to_string(), pos))
         })
-    }
-
-    pub fn next(&mut self) -> Result<Option<Token>, ParserError> {
-        if !self.skip_whitespace() {
-            return Ok(None)
-        }
-
-        let pos = (self.column, self.line, self.start);
-        match (self.next_char(), self.peek_char()) {
-            (Some('.'), Some(c)) if c.is_digit(10) => self.scan_number(pos, '\0'),
-            (Some(c), _) if c.is_digit(10) => self.scan_number(pos, c),
-            (Some(c), _) if Self::is_identifier(c) => self.scan_id(pos, c),
-            (Some('>'), Some('>')) => self.consume(Op(Shr), pos),
-            (Some('<'), Some('<')) => self.consume(Op(Shl), pos),
-            (Some('='), Some('=')) => self.consume(Op(Equ), pos),
-            (Some('!'), Some('=')) => self.consume(Op(Neq), pos),
-            (Some('>'), Some('=')) => self.consume(Op(Gte), pos),
-            (Some('<'), Some('=')) => self.consume(Op(Lte), pos),
-            (Some('&'), Some('&')) => self.consume(Op(And), pos),
-            (Some('|'), Some('|')) => self.consume(Op(Or), pos),
-            (Some('='), Some('>')) => self.consume(Arrow, pos),
-            (Some('('), Some('*')) => self.block_comment(pos),
-            (Some('#'), _) => self.line_comment(),
-            (Some('"'), _) => self.scan_str(pos),
-            (Some('~'), _) => Ok(Some((Op(Bnot), pos))),
-            (Some('&'), _) => Ok(Some((Op(Band), pos))),
-            (Some('^'), _) => Ok(Some((Op(Xor), pos))),
-            (Some('|'), _) => Ok(Some((Op(Bor), pos))),
-            (Some('!'), _) => Ok(Some((Op(Not), pos))),
-            (Some('+'), _) => Ok(Some((Op(Add), pos))),
-            (Some('-'), _) => Ok(Some((Op(Sub), pos))),
-            (Some('*'), _) => Ok(Some((Op(Mul), pos))),
-            (Some('/'), _) => Ok(Some((Op(Div), pos))),
-            (Some('%'), _) => Ok(Some((Op(Mod), pos))),
-            (Some('='), _) => Ok(Some((Op(Set), pos))),
-            (Some('('), _) => Ok(Some((LParen, pos))),
-            (Some(')'), _) => Ok(Some((RParen, pos))),
-            (Some('['), _) => Ok(Some((LBrace, pos))),
-            (Some(']'), _) => Ok(Some((RBrace, pos))),
-            (Some('{'), _) => Ok(Some((LCurly, pos))),
-            (Some('}'), _) => Ok(Some((RCurly, pos))),
-            (Some(','), _) => Ok(Some((Comma, pos))),
-            (Some(':'), _) => Ok(Some((Colon, pos))),
-            (Some('.'), _) => Ok(Some((Dot, pos))),
-            _ => Err(("Unexpected character", pos)),
-        }
     }
 }
