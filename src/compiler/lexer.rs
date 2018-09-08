@@ -1,8 +1,10 @@
 use super::ast::*;
-use std::str::Chars;
 use self::Keyword::*;
 use self::Operator::*;
 use self::TokenType::*;
+
+use std::str::Chars;
+use std::fmt::Display;
 use std::iter::Peekable;
 use std::collections::HashMap;
 
@@ -25,6 +27,41 @@ pub struct Lexer<'a> {
     start: usize,
     column: usize,
     chars: Peekable<Chars<'a>>,
+}
+
+impl<'a> Lexer<'a> {
+    #[inline]
+    fn expect_err<E, F>(pos: SourceLoc, expect: E, found: F)
+        -> ParserError where E: Display, F: Display {
+        ((format!("Expected {} found {}", expect, found), pos))
+    }
+
+    fn expect_id(&mut self) -> Result<(String, SourceLoc), ParserError> {
+        self.expect(|(token_type, pos)| match token_type {
+            Id(identifier) => Ok((identifier, pos)),
+            ttype => Err(Self::expect_err(pos, "identifier", ttype))
+        })
+    }
+
+    fn expect_type(&mut self, token_type: TokenType) -> Result<Token, ParserError> {
+        self.expect(|(ttype, pos)| {
+            if token_type == ttype {
+                Ok((ttype, pos))
+            } else {
+                Err(Self::expect_err(pos, ttype, token_type))
+            }
+        })
+    }
+
+    fn expect<C, V>(&mut self, consumer: C)
+        -> Result<V, ParserError> where
+        C: FnOnce(Token) -> Result<V, ParserError>
+    {
+        self.next().ok_or_else(|| {
+            let last_pos = (0, self.line - 1, self.start - self.column);
+            Self::expect_err(last_pos, "character", "eof")
+        }).and_then(|result| result.and_then(|token| consumer(token)))
+    }
 }
 
 impl<'a> Iterator for Lexer<'a> {

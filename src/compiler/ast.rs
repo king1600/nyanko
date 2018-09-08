@@ -60,17 +60,11 @@ pub enum ExprType {
 
 impl fmt::Display for TokenType {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "{}", self.to_string())
-    }
-}
-
-impl ToString for TokenType {
-    fn to_string(&self) -> String {
         use self::TokenType::*;
         use self::Operator::*;
         use self::Keyword::*;
 
-        match self {
+        write!(f, "{}", match self {
             &Dot => ".".to_string(),
             &Colon => ":".to_string(),
             &Comma => ",".to_string(),
@@ -113,6 +107,6 @@ impl ToString for TokenType {
             &Op(And)  => "&&".to_string(),
             &Op(Or)   => "||".to_string(),
             &Op(Not)  => "!".to_string(),
-        }
+        })
     }
 }
